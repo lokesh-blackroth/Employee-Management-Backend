@@ -1,37 +1,31 @@
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.generics import (
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 
 from employees.models import Employee
 from .serializers import EmployeeSerializer
 
 
-class EmployeeListAPIView(APIView):
+class EmployeeListAPIView(ListCreateAPIView):
+    """
+    GET  /api/v1/employees/
+    POST /api/v1/employees/
+    """
 
-    def get(self, request):
-        employees = Employee.objects.all()
-        serializer = EmployeeSerializer(employees, many=True)
-
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK
-        )
+    queryset = Employee.objects.all()
+    serializer_class = EmployeeSerializer
 
 
-class EmployeeDetailAPIView(APIView):
+class EmployeeDetailAPIView(RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/v1/employees/<employee_id>/
+    PUT    /api/v1/employees/<employee_id>/
+    PATCH  /api/v1/employees/<employee_id>/
+    DELETE /api/v1/employees/<employee_id>/
+    """
 
-    def get(self, request, employee_id):
-        try:
-            employee = Employee.objects.get(id=employee_id)
-        except Employee.DoesNotExist:
-            return Response(
-                {"detail": "Employee not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        serializer = EmployeeSerializer(employee)
-
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK
-        )
+    queryset = Employee.objects.all()
+    serializer_class = EmployeeSerializer
+    lookup_field = "id"
+    lookup_url_kwarg = "employee_id"

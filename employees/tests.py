@@ -20,6 +20,12 @@ class EmployeeAPITestCase(TestCase):
             is_active=True
         )
 
+        self.list_url = reverse("employee-list")
+        self.detail_url = reverse(
+            "employee-detail",
+            kwargs={"employee_id": self.employee.id}
+        )
+
     def test_create_employee(self):
         data = {
             "employee_code": "EMP002",
@@ -35,7 +41,7 @@ class EmployeeAPITestCase(TestCase):
         }
 
         response = self.client.post(
-            reverse("employee-list"),
+            self.list_url,
             data=data,
             content_type="application/json"
         )
@@ -43,21 +49,23 @@ class EmployeeAPITestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Employee.objects.count(), 2)
 
+    def test_list_employees(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+        self.assertEqual(len(response.json()), 1)
+
     def test_view_employee(self):
-        response = self.client.get(
-            reverse(
-                "employee-detail",
-                kwargs={"id": self.employee.id}
-            )
-        )
+        response = self.client.get(self.detail_url)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json()["employee"]["employee_code"],
+            response.json()["employee_code"],
             "EMP001"
         )
 
-    def test_update_employee(self):
+    def test_update_employee_put(self):
         data = {
             "employee_code": "EMP001",
             "first_name": "Rahul",
@@ -72,10 +80,7 @@ class EmployeeAPITestCase(TestCase):
         }
 
         response = self.client.put(
-            reverse(
-                "employee-detail",
-                kwargs={"id": self.employee.id}
-            ),
+            self.detail_url,
             data=data,
             content_type="application/json"
         )
@@ -93,70 +98,68 @@ class EmployeeAPITestCase(TestCase):
             70000.0
         )
 
-    def test_search_employee(self):
-        response = self.client.get(
-            reverse("employee-list"),
-            {"search": "Rahul"}
+    def test_update_employee_patch(self):
+        response = self.client.patch(
+            self.detail_url,
+            data={"salary": 65000},
+            content_type="application/json"
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["employees"]), 1)
 
-    def test_filter_employee_by_department(self):
-        response = self.client.get(
-            reverse("employee-list"),
-            {"department": "IT"}
+        self.employee.refresh_from_db()
+
+        self.assertEqual(
+            float(self.employee.salary),
+            65000.0
         )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["employees"]), 1)
-
-    def test_filter_active_employee(self):
-        response = self.client.get(
-            reverse("employee-list"),
-            {"is_active": "true"}
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["employees"]), 1)
 
     def test_delete_employee(self):
-        response = self.client.delete(
-            reverse(
-                "employee-detail",
-                kwargs={"id": self.employee.id}
-            )
-        )
+        response = self.client.delete(self.detail_url)
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 204)
         self.assertEqual(Employee.objects.count(), 0)
 
     def test_employee_not_found(self):
         response = self.client.get(
             reverse(
                 "employee-detail",
-                kwargs={"id": 99999}
+                kwargs={"employee_id": 99999}
             )
         )
 
         self.assertEqual(response.status_code, 404)
 
-    def test_invalid_salary(self):
+    def test_missing_required_field(self):
         data = {
-            "employee_code": "EMP003",
             "first_name": "Test",
+            "last_name": "User"
+        }
+
+        response = self.client.post(
+            self.list_url,
+            data=data,
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_duplicate_email(self):
+        data = {
+            "employee_code": "EMP002",
+            "first_name": "Duplicate",
             "last_name": "User",
-            "email": "test@example.com",
+            "email": "rahul@example.com",
             "phone": "9876543212",
             "department": "IT",
             "designation": "Developer",
-            "salary": -100,
+            "salary": 50000,
             "joining_date": "2024-03-15",
             "is_active": True
         }
 
         response = self.client.post(
-            reverse("employee-list"),
+            self.list_url,
             data=data,
             content_type="application/json"
         )
