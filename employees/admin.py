@@ -10,7 +10,6 @@ class EmployeeAdmin(admin.ModelAdmin):
         "first_name",
         "last_name",
         "email",
-        "salary",
     )
 
     search_fields = (
@@ -20,9 +19,7 @@ class EmployeeAdmin(admin.ModelAdmin):
         "email",
     )
 
-    list_filter = (
-        "salary",
-    )
+    list_filter = ()
 
     ordering = (
         "id",
