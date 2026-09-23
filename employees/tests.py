@@ -392,3 +392,220 @@ class EmployeeRelationshipTestCase(TestCase):
                 id=99999
             ).exists()
         )
+       # ============================================================
+# ADVANCED ORM REPORTING TESTS
+# ============================================================
+
+class AdvancedORMReportingTestCase(TestCase):
+
+    def setUp(self):
+        self.department = Department.objects.create(
+            name="Reporting Department",
+            code="REPORT_DEPT",
+            description="Department for ORM reporting tests",
+        )
+
+        self.employee1 = Employee.objects.create(
+            employee_code="REPORT001",
+            first_name="Alice",
+            last_name="Test",
+            email="alice.report@example.com",
+            phone="9111111111",
+            department=self.department,
+            designation="Developer",
+            salary=50000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        self.employee2 = Employee.objects.create(
+            employee_code="REPORT002",
+            first_name="Bob",
+            last_name="Test",
+            email="bob.report@example.com",
+            phone="9222222222",
+            department=self.department,
+            designation="Tester",
+            salary=60000,
+            joining_date=date(2026, 1, 2),
+            is_active=True,
+        )
+
+        self.project = Project.objects.create(
+            name="Reporting Project",
+            project_code="REPORTPRJ001",
+            description="Project for ORM reporting tests",
+            client_name="Reporting Client",
+            start_date=date(2026, 1, 1),
+            status="Active",
+        )
+
+    # --------------------------------------------------------
+    # EMPTY DEPARTMENT
+    # --------------------------------------------------------
+
+    def test_empty_department(self):
+        from django.db.models import Count
+
+        empty_department = Department.objects.create(
+            name="Empty Department",
+            code="EMPTY_DEPT",
+            description="Department with no employees",
+        )
+
+        result = Department.objects.annotate(
+            employee_count=Count("employees")
+        ).get(
+            id=empty_department.id
+        )
+
+        self.assertEqual(result.employee_count, 0)
+
+    # --------------------------------------------------------
+    # DEPARTMENT WITH EMPLOYEES
+    # --------------------------------------------------------
+
+    def test_department_with_employees(self):
+        from django.db.models import Count
+
+        result = Department.objects.annotate(
+            employee_count=Count("employees")
+        ).get(
+            id=self.department.id
+        )
+
+        self.assertEqual(result.employee_count, 2)
+
+    # --------------------------------------------------------
+    # MANY EMPLOYEES
+    # --------------------------------------------------------
+
+    def test_many_employees(self):
+        from django.db.models import Count
+
+        for i in range(3, 13):
+            Employee.objects.create(
+                employee_code=f"REPORT{i:03d}",
+                first_name=f"Employee{i}",
+                last_name="Test",
+                email=f"employee{i}.report@example.com",
+                phone=f"93333333{i:02d}",
+                department=self.department,
+                designation="Developer",
+                salary=40000 + (i * 1000),
+                joining_date=date(2026, 1, 10),
+                is_active=True,
+            )
+
+        result = Department.objects.annotate(
+            employee_count=Count("employees")
+        ).get(
+            id=self.department.id
+        )
+
+        self.assertEqual(result.employee_count, 12)
+
+    # --------------------------------------------------------
+    # PROJECT WITHOUT EMPLOYEES
+    # --------------------------------------------------------
+
+    def test_project_without_employees(self):
+        from django.db.models import Count
+
+        result = Project.objects.annotate(
+            employee_count=Count(
+                "employees",
+                distinct=True,
+            )
+        ).get(
+            id=self.project.id
+        )
+
+        self.assertEqual(result.employee_count, 0)
+
+    # --------------------------------------------------------
+    # EMPLOYEES WITHOUT PROJECTS
+    # --------------------------------------------------------
+
+    def test_employees_without_projects(self):
+        from django.db.models import Count
+
+        employees_without_projects = Employee.objects.annotate(
+            project_count=Count(
+                "projects",
+                distinct=True,
+            )
+        ).filter(
+            project_count=0
+        )
+
+        self.assertEqual(
+            employees_without_projects.count(),
+            2,
+        )
+
+    # --------------------------------------------------------
+    # DEPARTMENT SALARY CALCULATION
+    # --------------------------------------------------------
+
+    def test_department_salary_calculation(self):
+        from django.db.models import Avg, Count, Max
+
+        result = Department.objects.annotate(
+            employee_count=Count("employees"),
+            average_salary=Avg("employees__salary"),
+            maximum_salary=Max("employees__salary"),
+        ).get(
+            id=self.department.id
+        )
+
+        self.assertEqual(result.employee_count, 2)
+        self.assertEqual(float(result.average_salary), 55000.0)
+        self.assertEqual(float(result.maximum_salary), 60000.0)
+
+    # --------------------------------------------------------
+    # SALARY AGGREGATION
+    # --------------------------------------------------------
+
+    def test_salary_aggregation(self):
+        from django.db.models import Avg, Count, Max, Min, Sum
+
+        result = Employee.objects.aggregate(
+            total_employees=Count("id"),
+            average_salary=Avg("salary"),
+            maximum_salary=Max("salary"),
+            minimum_salary=Min("salary"),
+            total_salary_expenditure=Sum("salary"),
+        )
+
+        self.assertEqual(result["total_employees"], 2)
+        self.assertEqual(float(result["average_salary"]), 55000.0)
+        self.assertEqual(float(result["maximum_salary"]), 60000.0)
+        self.assertEqual(float(result["minimum_salary"]), 50000.0)
+        self.assertEqual(
+            float(result["total_salary_expenditure"]),
+            110000.0,
+        )
+
+    # --------------------------------------------------------
+    # PROJECT WITH EMPLOYEES
+    # --------------------------------------------------------
+
+    def test_project_with_employees(self):
+        from django.db.models import Count
+
+        self.project.employees.add(
+            self.employee1,
+            self.employee2,
+        )
+
+        result = Project.objects.annotate(
+            employee_count=Count(
+                "employees",
+                distinct=True,
+            )
+        ).get(
+            id=self.project.id
+        )
+
+        self.assertEqual(result.employee_count, 2)

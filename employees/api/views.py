@@ -1,5 +1,5 @@
 from django_filters.rest_framework import DjangoFilterBackend
-
+from rest_framework.views import APIView
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -7,7 +7,11 @@ from rest_framework.response import Response
 
 from employees.models import Employee
 from employees.api.serializers import EmployeeSerializer
-
+from employees.api.reports import (
+   get_department_summary,
+    get_project_summary,
+    get_salary_summary,
+)
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
@@ -50,3 +54,24 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         return Response(serializer.data)
+    
+class DepartmentSummaryView(APIView):
+
+    def get(self, request):
+        data = get_department_summary()
+
+        return Response(data)
+    
+class ProjectSummaryView(APIView):
+
+    def get(self, request):
+        data = get_project_summary()
+
+        return Response(data)
+    
+class SalarySummaryView(APIView):
+
+    def get(self, request):
+        data = get_salary_summary()
+
+        return Response(data)
