@@ -54,7 +54,10 @@ class EmployeeAPITestCase(APITestCase):
     def test_employee_list(self):
         response = self.client.get(self.list_url)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
 
     # --------------------------------------------------------
     # RETRIEVE
@@ -63,7 +66,10 @@ class EmployeeAPITestCase(APITestCase):
     def test_employee_detail(self):
         response = self.client.get(self.detail_url)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
 
     # --------------------------------------------------------
     # CREATE
@@ -392,7 +398,9 @@ class EmployeeRelationshipTestCase(TestCase):
                 id=99999
             ).exists()
         )
-       # ============================================================
+
+
+# ============================================================
 # ADVANCED ORM REPORTING TESTS
 # ============================================================
 
@@ -459,7 +467,10 @@ class AdvancedORMReportingTestCase(TestCase):
             id=empty_department.id
         )
 
-        self.assertEqual(result.employee_count, 0)
+        self.assertEqual(
+            result.employee_count,
+            0,
+        )
 
     # --------------------------------------------------------
     # DEPARTMENT WITH EMPLOYEES
@@ -474,7 +485,10 @@ class AdvancedORMReportingTestCase(TestCase):
             id=self.department.id
         )
 
-        self.assertEqual(result.employee_count, 2)
+        self.assertEqual(
+            result.employee_count,
+            2,
+        )
 
     # --------------------------------------------------------
     # MANY EMPLOYEES
@@ -503,7 +517,10 @@ class AdvancedORMReportingTestCase(TestCase):
             id=self.department.id
         )
 
-        self.assertEqual(result.employee_count, 12)
+        self.assertEqual(
+            result.employee_count,
+            12,
+        )
 
     # --------------------------------------------------------
     # PROJECT WITHOUT EMPLOYEES
@@ -521,7 +538,10 @@ class AdvancedORMReportingTestCase(TestCase):
             id=self.project.id
         )
 
-        self.assertEqual(result.employee_count, 0)
+        self.assertEqual(
+            result.employee_count,
+            0,
+        )
 
     # --------------------------------------------------------
     # EMPLOYEES WITHOUT PROJECTS
@@ -559,9 +579,20 @@ class AdvancedORMReportingTestCase(TestCase):
             id=self.department.id
         )
 
-        self.assertEqual(result.employee_count, 2)
-        self.assertEqual(float(result.average_salary), 55000.0)
-        self.assertEqual(float(result.maximum_salary), 60000.0)
+        self.assertEqual(
+            result.employee_count,
+            2,
+        )
+
+        self.assertEqual(
+            float(result.average_salary),
+            55000.0,
+        )
+
+        self.assertEqual(
+            float(result.maximum_salary),
+            60000.0,
+        )
 
     # --------------------------------------------------------
     # SALARY AGGREGATION
@@ -578,10 +609,26 @@ class AdvancedORMReportingTestCase(TestCase):
             total_salary_expenditure=Sum("salary"),
         )
 
-        self.assertEqual(result["total_employees"], 2)
-        self.assertEqual(float(result["average_salary"]), 55000.0)
-        self.assertEqual(float(result["maximum_salary"]), 60000.0)
-        self.assertEqual(float(result["minimum_salary"]), 50000.0)
+        self.assertEqual(
+            result["total_employees"],
+            2,
+        )
+
+        self.assertEqual(
+            float(result["average_salary"]),
+            55000.0,
+        )
+
+        self.assertEqual(
+            float(result["maximum_salary"]),
+            60000.0,
+        )
+
+        self.assertEqual(
+            float(result["minimum_salary"]),
+            50000.0,
+        )
+
         self.assertEqual(
             float(result["total_salary_expenditure"]),
             110000.0,
@@ -608,4 +655,33 @@ class AdvancedORMReportingTestCase(TestCase):
             id=self.project.id
         )
 
-        self.assertEqual(result.employee_count, 2)
+        self.assertEqual(
+            result.employee_count,
+            2,
+        )
+
+    # --------------------------------------------------------
+    # DB-004 QUERY OPTIMIZATION
+    # --------------------------------------------------------
+
+    def test_employee_details_query_count(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as context:
+            response = self.client.get(
+                "/api/v1/employees/details/"
+            )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        # Optimized endpoint should use:
+        # 1 query for Employee + Department + Profile
+        # 1 query for Projects
+        self.assertEqual(
+            len(context.captured_queries),
+            2,
+        )
