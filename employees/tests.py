@@ -1,11 +1,11 @@
 from datetime import date
 
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
 from rest_framework import status
 from rest_framework.test import APITestCase
-
 from .models import (
     Department,
     Employee,
@@ -684,4 +684,229 @@ class AdvancedORMReportingTestCase(TestCase):
         self.assertEqual(
             len(context.captured_queries),
             2,
+        )
+
+# ============================================================
+# AUTHENTICATION TESTS
+# ============================================================
+
+class AuthenticationAPITestCase(APITestCase):
+
+    def setUp(self):
+        self.register_url = "/api/v1/auth/register/"
+        self.login_url = "/api/v1/auth/login/"
+
+        self.user_data = {
+            "username": "authuser",
+            "email": "authuser@example.com",
+            "password": "SecurePassword123!",
+            "password_confirmation": "SecurePassword123!",
+            "first_name": "Auth",
+            "last_name": "User",
+        }
+
+        self.user = User.objects.create_user(
+            username="loginuser",
+            email="loginuser@example.com",
+            password="SecurePassword123!",
+            first_name="Login",
+            last_name="User",
+        )
+
+    def test_valid_registration(self):
+        response = self.client.post(
+            self.register_url,
+            self.user_data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertTrue(
+            User.objects.filter(
+                username="authuser"
+            ).exists()
+        )
+
+    def test_password_is_hashed(self):
+        response = self.client.post(
+            self.register_url,
+            self.user_data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        user = User.objects.get(
+            username="authuser"
+        )
+
+        self.assertNotEqual(
+            user.password,
+            "SecurePassword123!",
+        )
+
+        self.assertTrue(
+            user.check_password(
+                "SecurePassword123!"
+            )
+        )
+
+    def test_duplicate_username(self):
+        data = self.user_data.copy()
+        data["username"] = "loginuser"
+
+        response = self.client.post(
+            self.register_url,
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_duplicate_email(self):
+        data = self.user_data.copy()
+        data["email"] = "loginuser@example.com"
+
+        response = self.client.post(
+            self.register_url,
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_weak_password(self):
+        data = self.user_data.copy()
+        data["password"] = "123"
+        data["password_confirmation"] = "123"
+
+        response = self.client.post(
+            self.register_url,
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_password_mismatch(self):
+        data = self.user_data.copy()
+        data["password_confirmation"] = "DifferentPassword123!"
+
+        response = self.client.post(
+            self.register_url,
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_invalid_email(self):
+        data = self.user_data.copy()
+        data["email"] = "invalid-email"
+
+        response = self.client.post(
+            self.register_url,
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_missing_fields(self):
+        response = self.client.post(
+            self.register_url,
+            {
+                "username": "missinguser",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_valid_login(self):
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": "loginuser",
+                "password": "SecurePassword123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_wrong_password(self):
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": "loginuser",
+                "password": "WrongPassword123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_wrong_username(self):
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": "wronguser",
+                "password": "SecurePassword123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_inactive_user_cannot_login(self):
+        self.user.is_active = False
+        self.user.save()
+
+        response = self.client.post(
+            self.login_url,
+            {
+                "username": "loginuser",
+                "password": "SecurePassword123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
         )
