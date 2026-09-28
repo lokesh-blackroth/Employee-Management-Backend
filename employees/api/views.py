@@ -1,25 +1,29 @@
 from django.contrib.auth.models import User
 from django_filters.rest_framework import DjangoFilterBackend
 
-from rest_framework.views import APIView
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from employees.models import (
-    Employee,
-    EmployeeProfile,
-    EmployeeTransfer,
-)
-from employees.api.serializers import (
-    EmployeeSerializer,
-    EmployeeTransferSerializer,
+from employees.api.auth_serializers import (
+    LoginSerializer,
+    RegistrationSerializer,
 )
 from employees.api.reports import (
     get_department_summary,
     get_project_summary,
     get_salary_summary,
+)
+from employees.api.serializers import (
+    EmployeeSerializer,
+    EmployeeTransferSerializer,
+)
+from employees.models import (
+    Employee,
+    EmployeeProfile,
+    EmployeeTransfer,
 )
 from employees.services import EmployeeTransferService
 
@@ -146,8 +150,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Use authenticated user if available.
-        # For local testing, fall back to the first User.
         transferred_by = (
             request.user
             if request.user.is_authenticated
@@ -234,3 +236,57 @@ class SalarySummaryView(APIView):
         data = get_salary_summary()
 
         return Response(data)
+
+
+class RegistrationView(APIView):
+
+    def post(self, request):
+
+        serializer = RegistrationSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            user = serializer.save()
+
+            return Response(
+                {
+                    "message": "User registered successfully.",
+                    "username": user.username,
+                    "email": user.email,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class LoginView(APIView):
+
+    def post(self, request):
+
+        serializer = LoginSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+
+            user = serializer.validated_data["user"]
+
+            return Response(
+                {
+                    "message": "Login successful.",
+                    "username": user.username,
+                    "email": user.email,
+                },
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_401_UNAUTHORIZED
+        )
