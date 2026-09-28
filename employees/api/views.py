@@ -1,18 +1,27 @@
+from django.contrib.auth.models import User
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework.views import APIView
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.response import Response
 
-from employees.models import Employee, EmployeeProfile
-from employees.api.serializers import EmployeeSerializer
+from employees.models import (
+    Employee,
+    EmployeeProfile,
+    EmployeeTransfer,
+)
+from employees.api.serializers import (
+    EmployeeSerializer,
+    EmployeeTransferSerializer,
+)
 from employees.api.reports import (
     get_department_summary,
     get_project_summary,
     get_salary_summary,
 )
+from employees.services import EmployeeTransferService
 
 
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -118,6 +127,86 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             })
 
         return Response(data)
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="transfer",
+    )
+    def transfer(self, request, pk=None):
+
+        to_department = request.data.get("to_department")
+        reason = request.data.get("reason")
+
+        if not to_department:
+            return Response(
+                {
+                    "detail": "Target department is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Use authenticated user if available.
+        # For local testing, fall back to the first User.
+        transferred_by = (
+            request.user
+            if request.user.is_authenticated
+            else User.objects.first()
+        )
+
+        if transferred_by is None:
+            return Response(
+                {
+                    "detail": "No user exists to record the transfer."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            transfer = EmployeeTransferService.transfer_employee(
+                employee_id=pk,
+                to_department_id=to_department,
+                reason=reason,
+                transferred_by=transferred_by,
+            )
+
+            return Response(
+                EmployeeTransferSerializer(transfer).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as exc:
+            return Response(
+                {
+                    "detail": str(exc)
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="transfer-history",
+    )
+    def transfer_history(self, request, pk=None):
+
+        transfers = (
+            EmployeeTransfer.objects
+            .filter(employee_id=pk)
+            .select_related(
+                "from_department",
+                "to_department",
+                "transferred_by",
+            )
+            .order_by("-transferred_at")
+        )
+
+        serializer = EmployeeTransferSerializer(
+            transfers,
+            many=True,
+        )
+
+        return Response(serializer.data)
 
 
 class DepartmentSummaryView(APIView):
