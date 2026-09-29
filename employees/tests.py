@@ -2,6 +2,7 @@ from datetime import date
 
 from django.test import TestCase
 from django.urls import reverse
+from django.contrib.auth.models import User
 
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -21,6 +22,13 @@ from .models import (
 class EmployeeAPITestCase(APITestCase):
 
     def setUp(self):
+        # Authenticate all Employee API test requests
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="Test@12345"
+        )
+        self.client.force_authenticate(user=self.user)
+
         self.department = Department.objects.create(
             name="Test Department",
             code="TEST_DEPT",
@@ -199,8 +207,6 @@ class EmployeeAPITestCase(APITestCase):
             response.status_code,
             status.HTTP_404_NOT_FOUND,
         )
-
-
 # ============================================================
 # RELATIONSHIP TESTS
 # ============================================================
@@ -404,9 +410,16 @@ class EmployeeRelationshipTestCase(TestCase):
 # ADVANCED ORM REPORTING TESTS
 # ============================================================
 
-class AdvancedORMReportingTestCase(TestCase):
+class AdvancedORMReportingTestCase(APITestCase):
 
     def setUp(self):
+        # Authenticate API requests used by the query optimization test
+        self.user = User.objects.create_user(
+            username="reportuser",
+            password="Test@12345"
+        )
+        self.client.force_authenticate(user=self.user)
+
         self.department = Department.objects.create(
             name="Reporting Department",
             code="REPORT_DEPT",

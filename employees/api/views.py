@@ -4,6 +4,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -11,28 +12,40 @@ from employees.api.auth_serializers import (
     LoginSerializer,
     RegistrationSerializer,
 )
+
 from employees.api.reports import (
     get_department_summary,
     get_project_summary,
     get_salary_summary,
 )
+
 from employees.api.serializers import (
     EmployeeSerializer,
     EmployeeTransferSerializer,
 )
+
 from employees.models import (
     Employee,
     EmployeeProfile,
     EmployeeTransfer,
 )
+
 from employees.services import EmployeeTransferService
 
+
+# ============================================================
+# EMPLOYEE VIEWSET
+# ============================================================
 
 class EmployeeViewSet(viewsets.ModelViewSet):
 
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
 
+    # JWT protection
+    permission_classes = [IsAuthenticated]
+
+    # Filtering
     filter_backends = [
         DjangoFilterBackend,
         SearchFilter,
@@ -58,7 +71,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         "joining_date",
     ]
 
-    @action(detail=False, methods=["get"])
+    # ========================================================
+    # ACTIVE EMPLOYEES
+    # ========================================================
+
+    @action(
+        detail=False,
+        methods=["get"],
+    )
     def active(self, request):
 
         employees = self.get_queryset().filter(
@@ -72,7 +92,16 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data)
 
-    @action(detail=False, methods=["get"], url_path="details")
+    # ========================================================
+    # EMPLOYEE DETAILS
+    # DB-004 QUERY OPTIMIZATION
+    # ========================================================
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="details",
+    )
     def details(self, request):
 
         employees = (
@@ -97,33 +126,40 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
             data.append({
                 "id": employee.id,
+
                 "employee_code": employee.employee_code,
+
                 "name": (
                     f"{employee.first_name} "
                     f"{employee.last_name}"
                 ),
+
                 "department": (
                     employee.department.name
                     if employee.department
                     else None
                 ),
+
                 "profile": {
                     "address": (
                         profile.address
                         if profile
                         else None
                     ),
+
                     "blood_group": (
                         profile.blood_group
                         if profile
                         else None
                     ),
+
                     "emergency_contact": (
                         profile.emergency_contact
                         if profile
                         else None
                     ),
                 },
+
                 "projects": [
                     project.name
                     for project in employee.projects.all()
@@ -132,6 +168,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         return Response(data)
 
+    # ========================================================
+    # EMPLOYEE TRANSFER
+    # ========================================================
+
     @action(
         detail=True,
         methods=["post"],
@@ -139,13 +179,21 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     )
     def transfer(self, request, pk=None):
 
-        to_department = request.data.get("to_department")
-        reason = request.data.get("reason")
+        to_department = request.data.get(
+            "to_department"
+        )
+
+        reason = request.data.get(
+            "reason"
+        )
 
         if not to_department:
+
             return Response(
                 {
-                    "detail": "Target department is required."
+                    "detail": (
+                        "Target department is required."
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -157,27 +205,38 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         if transferred_by is None:
+
             return Response(
                 {
-                    "detail": "No user exists to record the transfer."
+                    "detail": (
+                        "No user exists to record "
+                        "the transfer."
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            transfer = EmployeeTransferService.transfer_employee(
-                employee_id=pk,
-                to_department_id=to_department,
-                reason=reason,
-                transferred_by=transferred_by,
+
+            transfer = (
+                EmployeeTransferService
+                .transfer_employee(
+                    employee_id=pk,
+                    to_department_id=to_department,
+                    reason=reason,
+                    transferred_by=transferred_by,
+                )
             )
 
             return Response(
-                EmployeeTransferSerializer(transfer).data,
+                EmployeeTransferSerializer(
+                    transfer
+                ).data,
                 status=status.HTTP_201_CREATED,
             )
 
         except Exception as exc:
+
             return Response(
                 {
                     "detail": str(exc)
@@ -185,22 +244,34 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+    # ========================================================
+    # TRANSFER HISTORY
+    # ========================================================
+
     @action(
         detail=True,
         methods=["get"],
         url_path="transfer-history",
     )
-    def transfer_history(self, request, pk=None):
+    def transfer_history(
+        self,
+        request,
+        pk=None,
+    ):
 
         transfers = (
             EmployeeTransfer.objects
-            .filter(employee_id=pk)
+            .filter(
+                employee_id=pk
+            )
             .select_related(
                 "from_department",
                 "to_department",
                 "transferred_by",
             )
-            .order_by("-transferred_at")
+            .order_by(
+                "-transferred_at"
+            )
         )
 
         serializer = EmployeeTransferSerializer(
@@ -208,10 +279,18 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             many=True,
         )
 
-        return Response(serializer.data)
+        return Response(
+            serializer.data
+        )
 
+
+# ============================================================
+# REPORTING APIs
+# ============================================================
 
 class DepartmentSummaryView(APIView):
+
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
@@ -222,6 +301,8 @@ class DepartmentSummaryView(APIView):
 
 class ProjectSummaryView(APIView):
 
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
 
         data = get_project_summary()
@@ -231,12 +312,18 @@ class ProjectSummaryView(APIView):
 
 class SalarySummaryView(APIView):
 
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
 
         data = get_salary_summary()
 
         return Response(data)
 
+
+# ============================================================
+# USER REGISTRATION
+# ============================================================
 
 class RegistrationView(APIView):
 
@@ -252,18 +339,24 @@ class RegistrationView(APIView):
 
             return Response(
                 {
-                    "message": "User registered successfully.",
+                    "message": (
+                        "User registered successfully."
+                    ),
                     "username": user.username,
                     "email": user.email,
                 },
-                status=status.HTTP_201_CREATED
+                status=status.HTTP_201_CREATED,
             )
 
         return Response(
             serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
+
+# ============================================================
+# USER LOGIN
+# ============================================================
 
 class LoginView(APIView):
 
@@ -283,10 +376,10 @@ class LoginView(APIView):
                     "username": user.username,
                     "email": user.email,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         return Response(
             serializer.errors,
-            status=status.HTTP_401_UNAUTHORIZED
+            status=status.HTTP_401_UNAUTHORIZED,
         )
