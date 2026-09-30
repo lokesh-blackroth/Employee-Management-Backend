@@ -4,10 +4,12 @@ from .routers import router
 from .views import (
     DepartmentSummaryView,
     LoginView,
+    MyProfileView,
     ProjectSummaryView,
     RegistrationView,
     SalarySummaryView,
 )
+
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -15,7 +17,29 @@ from rest_framework_simplejwt.views import (
 
 
 urlpatterns = [
-    path("", include(router.urls)),
+    # ========================================================
+    # EMPLOYEE ROUTER APIs
+    # ========================================================
+
+    path(
+        "",
+        include(router.urls),
+    ),
+
+    # ========================================================
+    # MY PROFILE
+    # SEC-003 RBAC OWNERSHIP
+    # ========================================================
+
+    path(
+        "profile/me/",
+        MyProfileView.as_view(),
+        name="my-profile",
+    ),
+
+    # ========================================================
+    # REPORTING APIs
+    # ========================================================
 
     path(
         "reports/department-summary/",
@@ -35,6 +59,10 @@ urlpatterns = [
         name="salary-summary",
     ),
 
+    # ========================================================
+    # AUTHENTICATION APIs
+    # ========================================================
+
     path(
         "auth/register/",
         RegistrationView.as_view(),
@@ -46,15 +74,20 @@ urlpatterns = [
         LoginView.as_view(),
         name="login",
     ),
-    path(
-    "auth/token/",
-    TokenObtainPairView.as_view(),
-    name="token_obtain_pair",
-),
 
-path(
-    "auth/token/refresh/",
-    TokenRefreshView.as_view(),
-    name="token_refresh",
-),
+    # ========================================================
+    # JWT APIs
+    # ========================================================
+
+    path(
+        "auth/token/",
+        TokenObtainPairView.as_view(),
+        name="token_obtain_pair",
+    ),
+
+    path(
+        "auth/token/refresh/",
+        TokenRefreshView.as_view(),
+        name="token_refresh",
+    ),
 ]

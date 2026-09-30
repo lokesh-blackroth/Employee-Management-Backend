@@ -7,6 +7,8 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from employees.models import UserRole
+
 from .models import (
     Department,
     Employee,
@@ -22,18 +24,38 @@ from .models import (
 class EmployeeAPITestCase(APITestCase):
 
     def setUp(self):
-        # Authenticate all Employee API test requests
+
+        # ----------------------------------------------------
+        # ADMIN TEST USER
+        # ----------------------------------------------------
+
         self.user = User.objects.create_user(
-            username="testuser",
-            password="Test@12345"
+            username="admin_test",
+            password="Test@12345",
         )
-        self.client.force_authenticate(user=self.user)
+
+        UserRole.objects.create(
+            user=self.user,
+            role="ADMIN",
+        )
+
+        self.client.force_authenticate(
+            user=self.user
+        )
+
+        # ----------------------------------------------------
+        # DEPARTMENT
+        # ----------------------------------------------------
 
         self.department = Department.objects.create(
             name="Test Department",
             code="TEST_DEPT",
             description="Department for automated tests",
         )
+
+        # ----------------------------------------------------
+        # EMPLOYEE
+        # ----------------------------------------------------
 
         self.employee = Employee.objects.create(
             employee_code="TEST001",
@@ -48,11 +70,19 @@ class EmployeeAPITestCase(APITestCase):
             is_active=True,
         )
 
-        self.list_url = reverse("employee-list")
+        # ----------------------------------------------------
+        # URLS
+        # ----------------------------------------------------
+
+        self.list_url = reverse(
+            "employee-list"
+        )
 
         self.detail_url = reverse(
             "employee-detail",
-            kwargs={"pk": self.employee.id},
+            kwargs={
+                "pk": self.employee.id
+            },
         )
 
     # --------------------------------------------------------
@@ -60,7 +90,10 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_employee_list(self):
-        response = self.client.get(self.list_url)
+
+        response = self.client.get(
+            self.list_url
+        )
 
         self.assertEqual(
             response.status_code,
@@ -72,7 +105,10 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_employee_detail(self):
-        response = self.client.get(self.detail_url)
+
+        response = self.client.get(
+            self.detail_url
+        )
 
         self.assertEqual(
             response.status_code,
@@ -84,6 +120,7 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_create_employee(self):
+
         data = {
             "employee_code": "TEST002",
             "first_name": "John",
@@ -113,6 +150,7 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_update_employee(self):
+
         data = {
             "employee_code": self.employee.employee_code,
             "first_name": "Updated",
@@ -122,7 +160,9 @@ class EmployeeAPITestCase(APITestCase):
             "department": self.department.id,
             "designation": self.employee.designation,
             "salary": 60000,
-            "joining_date": str(self.employee.joining_date),
+            "joining_date": str(
+                self.employee.joining_date
+            ),
             "is_active": True,
         }
 
@@ -142,7 +182,10 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_delete_employee(self):
-        response = self.client.delete(self.detail_url)
+
+        response = self.client.delete(
+            self.detail_url
+        )
 
         self.assertEqual(
             response.status_code,
@@ -154,6 +197,7 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_search_employee(self):
+
         response = self.client.get(
             f"{self.list_url}?search=Test"
         )
@@ -168,6 +212,7 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_department_filter(self):
+
         response = self.client.get(
             f"{self.list_url}?department={self.department.id}"
         )
@@ -182,6 +227,7 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_active_filter(self):
+
         response = self.client.get(
             f"{self.list_url}?is_active=true"
         )
@@ -196,17 +242,24 @@ class EmployeeAPITestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_employee_not_found(self):
+
         url = reverse(
             "employee-detail",
-            kwargs={"pk": 99999},
+            kwargs={
+                "pk": 99999
+            },
         )
 
-        response = self.client.get(url)
+        response = self.client.get(
+            url
+        )
 
         self.assertEqual(
             response.status_code,
             status.HTTP_404_NOT_FOUND,
         )
+
+
 # ============================================================
 # RELATIONSHIP TESTS
 # ============================================================
@@ -353,7 +406,9 @@ class EmployeeRelationshipTestCase(TestCase):
 
     def test_employee_project_relationship(self):
 
-        self.employee1.projects.add(self.project)
+        self.employee1.projects.add(
+            self.project
+        )
 
         self.assertIn(
             self.project,
@@ -413,18 +468,38 @@ class EmployeeRelationshipTestCase(TestCase):
 class AdvancedORMReportingTestCase(APITestCase):
 
     def setUp(self):
-        # Authenticate API requests used by the query optimization test
+
+        # ----------------------------------------------------
+        # ADMIN TEST USER
+        # ----------------------------------------------------
+
         self.user = User.objects.create_user(
             username="reportuser",
-            password="Test@12345"
+            password="Test@12345",
         )
-        self.client.force_authenticate(user=self.user)
+
+        UserRole.objects.create(
+            user=self.user,
+            role="ADMIN",
+        )
+
+        self.client.force_authenticate(
+            user=self.user
+        )
+
+        # ----------------------------------------------------
+        # DEPARTMENT
+        # ----------------------------------------------------
 
         self.department = Department.objects.create(
             name="Reporting Department",
             code="REPORT_DEPT",
             description="Department for ORM reporting tests",
         )
+
+        # ----------------------------------------------------
+        # EMPLOYEES
+        # ----------------------------------------------------
 
         self.employee1 = Employee.objects.create(
             employee_code="REPORT001",
@@ -452,6 +527,10 @@ class AdvancedORMReportingTestCase(APITestCase):
             is_active=True,
         )
 
+        # ----------------------------------------------------
+        # PROJECT
+        # ----------------------------------------------------
+
         self.project = Project.objects.create(
             name="Reporting Project",
             project_code="REPORTPRJ001",
@@ -466,6 +545,7 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_empty_department(self):
+
         from django.db.models import Count
 
         empty_department = Department.objects.create(
@@ -490,6 +570,7 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_department_with_employees(self):
+
         from django.db.models import Count
 
         result = Department.objects.annotate(
@@ -508,9 +589,11 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_many_employees(self):
+
         from django.db.models import Count
 
         for i in range(3, 13):
+
             Employee.objects.create(
                 employee_code=f"REPORT{i:03d}",
                 first_name=f"Employee{i}",
@@ -540,6 +623,7 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_project_without_employees(self):
+
         from django.db.models import Count
 
         result = Project.objects.annotate(
@@ -561,15 +645,20 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_employees_without_projects(self):
+
         from django.db.models import Count
 
-        employees_without_projects = Employee.objects.annotate(
-            project_count=Count(
-                "projects",
-                distinct=True,
+        employees_without_projects = (
+            Employee.objects
+            .annotate(
+                project_count=Count(
+                    "projects",
+                    distinct=True,
+                )
             )
-        ).filter(
-            project_count=0
+            .filter(
+                project_count=0
+            )
         )
 
         self.assertEqual(
@@ -582,7 +671,12 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_department_salary_calculation(self):
-        from django.db.models import Avg, Count, Max
+
+        from django.db.models import (
+            Avg,
+            Count,
+            Max,
+        )
 
         result = Department.objects.annotate(
             employee_count=Count("employees"),
@@ -612,7 +706,14 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_salary_aggregation(self):
-        from django.db.models import Avg, Count, Max, Min, Sum
+
+        from django.db.models import (
+            Avg,
+            Count,
+            Max,
+            Min,
+            Sum,
+        )
 
         result = Employee.objects.aggregate(
             total_employees=Count("id"),
@@ -652,6 +753,7 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_project_with_employees(self):
+
         from django.db.models import Count
 
         self.project.employees.add(
@@ -678,10 +780,16 @@ class AdvancedORMReportingTestCase(APITestCase):
     # --------------------------------------------------------
 
     def test_employee_details_query_count(self):
-        from django.db import connection
-        from django.test.utils import CaptureQueriesContext
 
-        with CaptureQueriesContext(connection) as context:
+        from django.db import connection
+        from django.test.utils import (
+            CaptureQueriesContext,
+        )
+
+        with CaptureQueriesContext(
+            connection
+        ) as context:
+
             response = self.client.get(
                 "/api/v1/employees/details/"
             )
@@ -694,7 +802,487 @@ class AdvancedORMReportingTestCase(APITestCase):
         # Optimized endpoint should use:
         # 1 query for Employee + Department + Profile
         # 1 query for Projects
+
         self.assertEqual(
             len(context.captured_queries),
             2,
+        )
+      
+# ============================================================
+# RBAC TESTS
+# ============================================================
+
+class RBACTestCase(APITestCase):
+
+    def setUp(self):
+
+        # ----------------------------------------------------
+        # DEPARTMENTS
+        # ----------------------------------------------------
+
+        self.hr_department = Department.objects.create(
+            name="RBAC HR",
+            code="RBAC_HR",
+            description="RBAC HR test department",
+        )
+
+        self.tech_department = Department.objects.create(
+            name="RBAC Technology",
+            code="RBAC_TECH",
+            description="RBAC technology test department",
+        )
+
+        # ----------------------------------------------------
+        # USERS
+        # ----------------------------------------------------
+
+        self.admin_user = User.objects.create_user(
+            username="admin_test",
+            password="Test@12345",
+        )
+
+        self.hr_user = User.objects.create_user(
+            username="hr_test",
+            password="Test@12345",
+        )
+
+        self.manager_user = User.objects.create_user(
+            username="manager_test",
+            password="Test@12345",
+        )
+
+        self.employee_user = User.objects.create_user(
+            username="employee_test",
+            password="Test@12345",
+        )
+
+        # ----------------------------------------------------
+        # ROLES
+        # ----------------------------------------------------
+
+        UserRole.objects.create(
+            user=self.admin_user,
+            role="ADMIN",
+        )
+
+        UserRole.objects.create(
+            user=self.hr_user,
+            role="HR",
+        )
+
+        UserRole.objects.create(
+            user=self.manager_user,
+            role="MANAGER",
+        )
+
+        UserRole.objects.create(
+            user=self.employee_user,
+            role="EMPLOYEE",
+        )
+
+        # ----------------------------------------------------
+        # EMPLOYEE RECORDS
+        # ----------------------------------------------------
+
+        self.admin_employee = Employee.objects.create(
+            user=self.admin_user,
+            employee_code="ADMIN001",
+            first_name="Admin",
+            last_name="Test",
+            email="admin@test.com",
+            phone="9000000001",
+            department=self.hr_department,
+            designation="Administrator",
+            salary=80000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        self.hr_employee = Employee.objects.create(
+            user=self.hr_user,
+            employee_code="HR001",
+            first_name="HR",
+            last_name="Test",
+            email="hr@test.com",
+            phone="9000000002",
+            department=self.hr_department,
+            designation="HR Executive",
+            salary=60000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        self.manager_employee = Employee.objects.create(
+            user=self.manager_user,
+            employee_code="MANAGER001",
+            first_name="Manager",
+            last_name="Test",
+            email="manager@test.com",
+            phone="9000000003",
+            department=self.tech_department,
+            designation="Manager",
+            salary=70000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        self.employee = Employee.objects.create(
+            user=self.employee_user,
+            employee_code="EMP001",
+            first_name="Employee",
+            last_name="Test",
+            email="employee@test.com",
+            phone="9000000004",
+            department=self.tech_department,
+            designation="Developer",
+            salary=50000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        # ----------------------------------------------------
+        # PROFILE URL
+        # ----------------------------------------------------
+
+        self.profile_url = reverse("my-profile")
+
+    # ========================================================
+    # EMPLOYEE OWN PROFILE
+    # ========================================================
+
+    def test_employee_can_access_own_profile(self):
+
+        self.client.force_authenticate(
+            user=self.employee_user
+        )
+
+        response = self.client.get(
+            self.profile_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data["employee_code"],
+            "EMP001",
+        )
+
+    # ========================================================
+    # EMPLOYEE CANNOT ACCESS ANOTHER EMPLOYEE
+    # ========================================================
+
+    def test_employee_cannot_access_another_employee_profile(self):
+
+        self.client.force_authenticate(
+            user=self.employee_user
+        )
+
+        # Employee A accesses own profile
+        response = self.client.get(
+            self.profile_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data["employee_code"],
+            "EMP001",
+        )
+
+        # Create Employee B
+        other_employee_user = User.objects.create_user(
+            username="employee_b",
+            password="Test@12345",
+        )
+
+        UserRole.objects.create(
+            user=other_employee_user,
+            role="EMPLOYEE",
+        )
+
+        Employee.objects.create(
+            user=other_employee_user,
+            employee_code="EMP002",
+            first_name="Employee",
+            last_name="B",
+            email="employee_b@test.com",
+            phone="9000000005",
+            department=self.tech_department,
+            designation="Tester",
+            salary=50000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+        # Employee A requests /profile/me/
+        response = self.client.get(
+            self.profile_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        # Still Employee A's profile
+        self.assertEqual(
+            response.data["employee_code"],
+            "EMP001",
+        )
+
+        self.assertNotEqual(
+            response.data["employee_code"],
+            "EMP002",
+        )
+
+    # ========================================================
+    # UNAUTHENTICATED ACCESS
+    # ========================================================
+
+    def test_unauthenticated_user_cannot_access_profile(self):
+
+        self.client.force_authenticate(
+            user=None
+        )
+
+        response = self.client.get(
+            self.profile_url
+        )
+
+        self.assertEqual(
+            response.status_code,
+            401,
+        )
+
+    # ========================================================
+    # ADMIN CREATE
+    # ========================================================
+
+    def test_admin_can_create_employee(self):
+
+        self.client.force_authenticate(
+            user=self.admin_user
+        )
+
+        response = self.client.post(
+            reverse("employee-list"),
+            {
+                "employee_code": "ADMIN_CREATE_001",
+                "first_name": "New",
+                "last_name": "Employee",
+                "email": "newemployee@test.com",
+                "phone": "9000000010",
+                "department": self.tech_department.id,
+                "designation": "Developer",
+                "salary": "55000.00",
+                "joining_date": "2026-01-01",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+    # ========================================================
+    # ADMIN DELETE
+    # ========================================================
+
+    def test_admin_can_delete_employee(self):
+
+        self.client.force_authenticate(
+            user=self.admin_user
+        )
+
+        response = self.client.delete(
+            reverse(
+                "employee-detail",
+                kwargs={
+                    "pk": self.employee.id,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            204,
+        )
+            # ========================================================
+    # HR VIEW
+    # ========================================================
+
+    def test_hr_can_view_employees(self):
+
+        self.client.force_authenticate(
+            user=self.hr_user
+        )
+
+        response = self.client.get(
+            reverse("employee-list")
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+    # ========================================================
+    # HR CREATE
+    # ========================================================
+
+    def test_hr_can_create_employee(self):
+
+        self.client.force_authenticate(
+            user=self.hr_user
+        )
+
+        response = self.client.post(
+            reverse("employee-list"),
+            {
+                "employee_code": "HR_CREATE_001",
+                "first_name": "HR",
+                "last_name": "Created",
+                "email": "hrcreated@test.com",
+                "phone": "9000000011",
+                "department": self.tech_department.id,
+                "designation": "Tester",
+                "salary": "50000.00",
+                "joining_date": "2026-01-01",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            201,
+        )
+
+    # ========================================================
+    # HR CANNOT DELETE
+    # ========================================================
+
+    def test_hr_cannot_delete_employee(self):
+
+        self.client.force_authenticate(
+            user=self.hr_user
+        )
+
+        response = self.client.delete(
+            reverse(
+                "employee-detail",
+                kwargs={
+                    "pk": self.employee.id,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+    # ========================================================
+    # MANAGER VIEW
+    # ========================================================
+
+    def test_manager_can_view_employees(self):
+
+        self.client.force_authenticate(
+            user=self.manager_user
+        )
+
+        response = self.client.get(
+            reverse("employee-list")
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+    # ========================================================
+    # MANAGER CANNOT CREATE
+    # ========================================================
+
+    def test_manager_cannot_create_employee(self):
+
+        self.client.force_authenticate(
+            user=self.manager_user
+        )
+
+        response = self.client.post(
+            reverse("employee-list"),
+            {
+                "employee_code": "MANAGER_CREATE_001",
+                "first_name": "Manager",
+                "last_name": "Created",
+                "email": "managercreated@test.com",
+                "phone": "9000000012",
+                "department": self.tech_department.id,
+                "designation": "Developer",
+                "salary": "50000.00",
+                "joining_date": "2026-01-01",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+    # ========================================================
+    # MANAGER CANNOT DELETE
+    # ========================================================
+
+    def test_manager_cannot_delete_employee(self):
+
+        self.client.force_authenticate(
+            user=self.manager_user
+        )
+
+        response = self.client.delete(
+            reverse(
+                "employee-detail",
+                kwargs={
+                    "pk": self.employee.id,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+            # ========================================================
+    # MANAGER BUSINESS SCOPE
+    # ========================================================
+
+    def test_manager_cannot_view_employee_outside_scope(self):
+
+        self.client.force_authenticate(
+            user=self.manager_user
+        )
+
+        response = self.client.get(
+            reverse(
+                "employee-detail",
+                kwargs={
+                    "pk": self.hr_employee.id,
+                },
+            )
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
         )

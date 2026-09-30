@@ -8,6 +8,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from employees.api.permissions import (
+    IsAdmin,
+    IsAdminOrHR,
+    IsAdminHROrManager,
+)
+
 from employees.api.auth_serializers import (
     LoginSerializer,
     RegistrationSerializer,
@@ -42,10 +48,71 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
 
-    # JWT protection
-    permission_classes = [IsAuthenticated]
+    # ========================================================
+    # ROLE-BASED PERMISSIONS
+    # ========================================================
 
-    # Filtering
+    def get_permissions(self):
+
+        if self.action == "destroy":
+            permission_classes = [IsAdmin]
+
+        elif self.action in [
+            "create",
+            "update",
+            "partial_update",
+        ]:
+            permission_classes = [IsAdminOrHR]
+
+        elif self.action in [
+            "list",
+            "retrieve",
+            "active",
+            "details",
+            "transfer",
+            "transfer_history",
+        ]:
+            permission_classes = [IsAdminHROrManager]
+
+        else:
+            permission_classes = [IsAuthenticated]
+
+        return [
+            permission()
+            for permission in permission_classes
+        ]
+
+    # ========================================================
+    # MANAGER SCOPE
+    # ========================================================
+
+    def get_queryset(self):
+
+        queryset = Employee.objects.all()
+
+        # Managers can only access employees
+        # belonging to their own department.
+        if (
+            self.request.user.is_authenticated
+            and hasattr(self.request.user, "user_role")
+            and self.request.user.user_role.role == "MANAGER"
+        ):
+            try:
+                manager_employee = self.request.user.employee
+
+                queryset = queryset.filter(
+                    department=manager_employee.department
+                )
+
+            except Employee.DoesNotExist:
+                queryset = queryset.none()
+
+        return queryset
+
+    # ========================================================
+    # FILTERING
+    # ========================================================
+
     filter_backends = [
         DjangoFilterBackend,
         SearchFilter,
@@ -104,8 +171,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     )
     def details(self, request):
 
+        # IMPORTANT:
+        # Use self.get_queryset() so manager scope
+        # is also applied here.
         employees = (
-            Employee.objects
+            self.get_queryset()
             .select_related(
                 "department",
                 "profile",
@@ -178,6 +248,18 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         url_path="transfer",
     )
     def transfer(self, request, pk=None):
+
+        # Managers are only allowed to work
+        # within their permitted queryset.
+        employee_queryset = self.get_queryset()
+
+        if not employee_queryset.filter(pk=pk).exists():
+            return Response(
+                {
+                    "detail": "Employee not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         to_department = request.data.get(
             "to_department"
@@ -259,6 +341,19 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         pk=None,
     ):
 
+        # Prevent managers from viewing
+        # transfer history outside their scope.
+        if not self.get_queryset().filter(
+            pk=pk
+        ).exists():
+
+            return Response(
+                {
+                    "detail": "Employee not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         transfers = (
             EmployeeTransfer.objects
             .filter(
@@ -312,7 +407,10 @@ class ProjectSummaryView(APIView):
 
 class SalarySummaryView(APIView):
 
-    permission_classes = [IsAuthenticated]
+    # Salary reporting is restricted to ADMIN.
+    # This prevents managers/employees from
+    # accessing sensitive organization-wide salary data.
+    permission_classes = [IsAdmin]
 
     def get(self, request):
 
@@ -382,4 +480,97 @@ class LoginView(APIView):
         return Response(
             serializer.errors,
             status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+
+# ============================================================
+# MY PROFILE API
+# SEC-003 RBAC OWNERSHIP
+# ============================================================
+
+class MyProfileView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        try:
+
+            employee = (
+                Employee.objects
+                .select_related(
+                    "department",
+                    "profile",
+                )
+                .get(
+                    user=request.user
+                )
+            )
+
+        except Employee.DoesNotExist:
+
+            return Response(
+                {
+                    "detail": "Employee profile not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            profile = employee.profile
+        except EmployeeProfile.DoesNotExist:
+            profile = None
+
+        return Response(
+            {
+                "id": employee.id,
+
+                "employee_code": employee.employee_code,
+
+                "first_name": employee.first_name,
+
+                "last_name": employee.last_name,
+
+                "email": employee.email,
+
+                "phone": employee.phone,
+
+                "department": (
+                    employee.department.name
+                    if employee.department
+                    else None
+                ),
+
+                "designation": employee.designation,
+
+                "joining_date": employee.joining_date,
+
+                "is_active": employee.is_active,
+
+                "profile": {
+                    "date_of_birth": (
+                        profile.date_of_birth
+                        if profile
+                        else None
+                    ),
+
+                    "address": (
+                        profile.address
+                        if profile
+                        else None
+                    ),
+
+                    "emergency_contact": (
+                        profile.emergency_contact
+                        if profile
+                        else None
+                    ),
+
+                    "blood_group": (
+                        profile.blood_group
+                        if profile
+                        else None
+                    ),
+                },
+            }
         )

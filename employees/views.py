@@ -155,4 +155,25 @@ def employee_detail(request, id):
             "status": "success",
             "message": "Employee deleted successfully"
         })
+
+def get_queryset(self):
+
+    queryset = Employee.objects.all()
+
+    if (
+        self.request.user.is_authenticated
+        and hasattr(self.request.user, "user_role")
+        and self.request.user.user_role.role == "MANAGER"
+    ):
+        try:
+            manager_employee = self.request.user.employee
+
+            queryset = queryset.filter(
+                department=manager_employee.department
+            )
+
+        except Employee.DoesNotExist:
+            queryset = queryset.none()
+
+    return queryset
     
