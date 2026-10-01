@@ -26,7 +26,70 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        
+
+    def validate_employee_code(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Employee code cannot be empty."
+            )
+
+        if len(value) > 20:
+            raise serializers.ValidationError(
+                "Employee code cannot exceed 20 characters."
+            )
+
+        return value
+
+    def validate_first_name(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "First name cannot be empty."
+            )
+
+        if len(value) > 100:
+            raise serializers.ValidationError(
+                "First name cannot exceed 100 characters."
+            )
+
+        return value
+
+    def validate_last_name(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Last name cannot be empty."
+            )
+
+        if len(value) > 100:
+            raise serializers.ValidationError(
+                "Last name cannot exceed 100 characters."
+            )
+
+        return value
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Email cannot be empty."
+            )
+
+        return value
+
+    def validate_salary(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Salary cannot be negative."
+            )
+
+        return value
+
 class EmployeeTransferSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeTransfer
