@@ -761,3 +761,12 @@ class EmployeeProfileView(APIView):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+class HealthCheckView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        return Response({
+            "status": "success",
+            "message": "Employee Management Backend is running"
+        })

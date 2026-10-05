@@ -6,7 +6,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.forms.models import model_to_dict
-
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from .models import Employee
 from .forms import EmployeeForm
 
@@ -176,4 +177,12 @@ def get_queryset(self):
             queryset = queryset.none()
 
     return queryset
+class HealthCheckView(APIView):
+    permission_classes = []
+
+def get(self, request):
+        return Response({
+            "status": "success",
+            "message": "Employee Management Backend is running"
+        })
     
