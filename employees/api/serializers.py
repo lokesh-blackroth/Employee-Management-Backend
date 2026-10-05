@@ -1,30 +1,35 @@
 from rest_framework import serializers
-from employees.models import EmployeeTransfer
-from employees.models import Employee
+
+from employees.models import (
+    Employee,
+    EmployeeProfile,
+    EmployeeTransfer,
+)
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Employee
         fields = [
-            'id',
-            'employee_code',
-            'first_name',
-            'last_name',
-            'email',
-            'phone',
-            'department',
-            'designation',
-            'salary',
-            'joining_date',
-            'is_active',
-            'created_at',
-            'updated_at',
+            "id",
+            "employee_code",
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "department",
+            "designation",
+            "salary",
+            "joining_date",
+            "is_active",
+            "created_at",
+            "updated_at",
         ]
         read_only_fields = [
-            'id',
-            'created_at',
-            'updated_at',
+            "id",
+            "created_at",
+            "updated_at",
         ]
 
     def validate_employee_code(self, value):
@@ -90,7 +95,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return value
 
+
 class EmployeeTransferSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = EmployeeTransfer
         fields = [
@@ -111,3 +118,41 @@ class EmployeeTransferSerializer(serializers.ModelSerializer):
             "transferred_at",
             "status",
         ]
+
+
+class EmployeeProfileSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = EmployeeProfile
+        fields = [
+            "date_of_birth",
+            "address",
+            "emergency_contact",
+            "blood_group",
+            "profile_image",
+        ]
+
+    def validate_address(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Address cannot be empty."
+            )
+
+        return value
+
+    def validate_emergency_contact(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Emergency contact cannot be empty."
+            )
+
+        if len(value) > 15:
+            raise serializers.ValidationError(
+                "Emergency contact cannot exceed 15 characters."
+            )
+
+        return value

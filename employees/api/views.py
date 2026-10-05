@@ -26,6 +26,7 @@ from employees.api.reports import (
 )
 
 from employees.api.serializers import (
+    EmployeeProfileSerializer,
     EmployeeSerializer,
     EmployeeTransferSerializer,
 )
@@ -90,8 +91,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         queryset = Employee.objects.all()
 
-        # Managers can only access employees
-        # belonging to their own department.
         if (
             self.request.user.is_authenticated
             and hasattr(self.request.user, "user_role")
@@ -171,9 +170,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     )
     def details(self, request):
 
-        # IMPORTANT:
-        # Use self.get_queryset() so manager scope
-        # is also applied here.
         employees = (
             self.get_queryset()
             .select_related(
@@ -194,47 +190,42 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             except EmployeeProfile.DoesNotExist:
                 profile = None
 
-            data.append({
-                "id": employee.id,
-
-                "employee_code": employee.employee_code,
-
-                "name": (
-                    f"{employee.first_name} "
-                    f"{employee.last_name}"
-                ),
-
-                "department": (
-                    employee.department.name
-                    if employee.department
-                    else None
-                ),
-
-                "profile": {
-                    "address": (
-                        profile.address
-                        if profile
+            data.append(
+                {
+                    "id": employee.id,
+                    "employee_code": employee.employee_code,
+                    "name": (
+                        f"{employee.first_name} "
+                        f"{employee.last_name}"
+                    ),
+                    "department": (
+                        employee.department.name
+                        if employee.department
                         else None
                     ),
-
-                    "blood_group": (
-                        profile.blood_group
-                        if profile
-                        else None
-                    ),
-
-                    "emergency_contact": (
-                        profile.emergency_contact
-                        if profile
-                        else None
-                    ),
-                },
-
-                "projects": [
-                    project.name
-                    for project in employee.projects.all()
-                ],
-            })
+                    "profile": {
+                        "address": (
+                            profile.address
+                            if profile
+                            else None
+                        ),
+                        "blood_group": (
+                            profile.blood_group
+                            if profile
+                            else None
+                        ),
+                        "emergency_contact": (
+                            profile.emergency_contact
+                            if profile
+                            else None
+                        ),
+                    },
+                    "projects": [
+                        project.name
+                        for project in employee.projects.all()
+                    ],
+                }
+            )
 
         return Response(data)
 
@@ -249,8 +240,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     )
     def transfer(self, request, pk=None):
 
-        # Managers are only allowed to work
-        # within their permitted queryset.
         employee_queryset = self.get_queryset()
 
         if not employee_queryset.filter(pk=pk).exists():
@@ -270,7 +259,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         if not to_department:
-
             return Response(
                 {
                     "detail": (
@@ -287,7 +275,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         if transferred_by is None:
-
             return Response(
                 {
                     "detail": (
@@ -341,8 +328,6 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         pk=None,
     ):
 
-        # Prevent managers from viewing
-        # transfer history outside their scope.
         if not self.get_queryset().filter(
             pk=pk
         ).exists():
@@ -408,8 +393,6 @@ class ProjectSummaryView(APIView):
 class SalarySummaryView(APIView):
 
     # Salary reporting is restricted to ADMIN.
-    # This prevents managers/employees from
-    # accessing sensitive organization-wide salary data.
     permission_classes = [IsAdmin]
 
     def get(self, request):
@@ -492,11 +475,10 @@ class MyProfileView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get_employee(self, request):
 
         try:
-
-            employee = (
+            return (
                 Employee.objects
                 .select_related(
                     "department",
@@ -508,7 +490,13 @@ class MyProfileView(APIView):
             )
 
         except Employee.DoesNotExist:
+            return None
 
+    def get(self, request):
+
+        employee = self.get_employee(request)
+
+        if employee is None:
             return Response(
                 {
                     "detail": "Employee profile not found."
@@ -518,59 +506,258 @@ class MyProfileView(APIView):
 
         try:
             profile = employee.profile
+
         except EmployeeProfile.DoesNotExist:
             profile = None
+             
 
         return Response(
             {
                 "id": employee.id,
-
                 "employee_code": employee.employee_code,
-
                 "first_name": employee.first_name,
-
                 "last_name": employee.last_name,
-
                 "email": employee.email,
-
                 "phone": employee.phone,
-
                 "department": (
                     employee.department.name
                     if employee.department
                     else None
                 ),
-
                 "designation": employee.designation,
-
                 "joining_date": employee.joining_date,
-
                 "is_active": employee.is_active,
-
-                "profile": {
-                    "date_of_birth": (
-                        profile.date_of_birth
-                        if profile
-                        else None
-                    ),
-
-                    "address": (
-                        profile.address
-                        if profile
-                        else None
-                    ),
-
-                    "emergency_contact": (
-                        profile.emergency_contact
-                        if profile
-                        else None
-                    ),
-
-                    "blood_group": (
-                        profile.blood_group
-                        if profile
-                        else None
-                    ),
-                },
+                "profile": EmployeeProfileSerializer(
+                    profile
+                ).data,
             }
+        )
+
+    def patch(self, request):
+
+        employee = self.get_employee(request)
+
+        if employee is None:
+            return Response(
+                {
+                    "detail": "Employee not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            profile = employee.profile
+
+        except EmployeeProfile.DoesNotExist:
+            return Response(
+                {
+                    "detail": "Employee profile not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = EmployeeProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+# ============================================================
+# EMPLOYEE PROFILE API
+# SEC-005 OBJECT-LEVEL AUTHORIZATION
+# ============================================================
+
+class EmployeeProfileView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get_employee(self, request, pk):
+
+        try:
+            return (
+                Employee.objects
+                .select_related(
+                    "department",
+                    "profile",
+                    "user",
+                )
+                .get(pk=pk)
+            )
+
+        except Employee.DoesNotExist:
+            return None
+
+    def check_access(
+        self,
+        request,
+        employee,
+    ):
+
+        user = request.user
+
+        if not hasattr(user, "user_role"):
+            return False, "You do not have permission to access this profile."
+
+        role = user.user_role.role
+
+        # ADMIN has full access.
+        if role == "ADMIN":
+            return True, None
+
+        # HR can manage employee profiles.
+        if role == "HR":
+            return True, None
+
+        # EMPLOYEE can access only their own profile.
+        if role == "EMPLOYEE":
+
+            try:
+                own_employee = user.employee
+
+            except Employee.DoesNotExist:
+                return False, "Employee profile not found."
+
+            if own_employee.id == employee.id:
+                return True, None
+
+            return False, "You can access only your own profile."
+
+        # Managers are not given profile-management access.
+        return False, "You do not have permission to access this profile."
+
+    def get(self, request, pk):
+
+        employee = self.get_employee(
+            request,
+            pk
+        )
+
+        if employee is None:
+            return Response(
+                {
+                    "detail": "Employee not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        allowed, message = self.check_access(
+            request,
+            employee,
+        )
+
+        if not allowed:
+            return Response(
+                {
+                    "detail": message
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            profile = employee.profile
+
+        except EmployeeProfile.DoesNotExist:
+            return Response(
+                {
+                    "detail": "Employee profile not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "employee": {
+                    "id": employee.id,
+                    "employee_code": employee.employee_code,
+                    "first_name": employee.first_name,
+                    "last_name": employee.last_name,
+                    "email": employee.email,
+                    "phone": employee.phone,
+                    "department": (
+                        employee.department.name
+                        if employee.department
+                        else None
+                    ),
+                    "designation": employee.designation,
+                    "joining_date": employee.joining_date,
+                    "is_active": employee.is_active,
+                },
+                "profile": EmployeeProfileSerializer(
+                    profile
+                ).data,
+            }
+        )
+
+    def patch(self, request, pk):
+
+        employee = self.get_employee(
+            request,
+            pk
+        )
+
+        if employee is None:
+            return Response(
+                {
+                    "detail": "Employee not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        allowed, message = self.check_access(
+            request,
+            employee,
+        )
+
+        if not allowed:
+            return Response(
+                {
+                    "detail": message
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            profile = employee.profile
+
+        except EmployeeProfile.DoesNotExist:
+            return Response(
+                {
+                    "detail": "Employee profile not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = EmployeeProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
         )

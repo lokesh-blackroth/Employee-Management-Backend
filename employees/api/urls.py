@@ -8,6 +8,7 @@ from .views import (
     ProjectSummaryView,
     RegistrationView,
     SalarySummaryView,
+    EmployeeProfileView,
 )
 
 from rest_framework_simplejwt.views import (
@@ -35,6 +36,12 @@ urlpatterns = [
         "profile/me/",
         MyProfileView.as_view(),
         name="my-profile",
+    ),
+
+    path(
+        "employees/<int:pk>/profile/",
+        EmployeeProfileView.as_view(),
+        name="employee-profile",
     ),
 
     # ========================================================
@@ -90,4 +97,10 @@ urlpatterns = [
         TokenRefreshView.as_view(),
         name="token_refresh",
     ),
+
+    path(
+    "employees/<int:pk>/profile/",
+    EmployeeProfileView.as_view(),
+    name="employee-profile",
+),
 ]
