@@ -549,3 +549,94 @@ Business rules are not placed inside signals.
 | Signal exception handling | PASS |
 | Sensitive data protection | PASS |
 | Business rules kept outside signals | PASS |
+
+# ADV-002 — Django Management Commands & CSV Processing
+
+## Overview
+
+Implemented advanced Django management commands and reusable CSV processing
+for employee data management.
+
+## Management Commands
+
+### 1. Seed Employees
+
+```bash
+python manage.py seed_employees
+Creates sample employees.
+The command is repeat-safe. Existing employees are skipped instead of being
+created again.
+2. Deactivate Old Employees
+python manage.py deactivate_old_employees
+
+Business rule:
+Employees whose joining date is more than 5 years old and who are currently
+active are automatically deactivated.
+3. Export Employees
+python manage.py export_employees --output employees.csv
+
+Exports employee information to CSV.
+4. Import Employees
+python manage.py import_employees employees.csv
+
+Imports employee records from CSV and reports:
+- Successful rows
+- Skipped duplicate rows
+- Failed rows
+- Row-level validation errors
+5. Atomic Import
+python manage.py import_employees employees.csv --atomic
+
+If any row fails, the entire import is rolled back.
+CSV Validation
+The importer validates:
+- Required CSV headers
+- Required fields
+- Email format
+- Salary format
+- Duplicate employee code
+- Duplicate email
+- Missing values
+- Malformed rows
+- Missing input files
+Duplicate Handling
+Duplicate employees are skipped when either:
+- employee_code already exists
+- email already exists
+Duplicates within the same CSV import are also handled.
+Service Layer
+CSV processing is separated from the management command.
+employees/services/csv_employee_service.py
+
+The management command handles CLI arguments and CSV file reading.
+The service handles validation, duplicate detection, employee creation, and
+transaction processing.
+Transaction Behavior
+Normal import supports partial processing:
+Valid rows   -> saved
+Invalid rows -> reported
+Duplicates   -> skipped
+
+Atomic import supports all-or-nothing processing:
+Any failed row
+      ↓
+Transaction rollback
+      ↓
+No new rows committed
+
+Testing Performed
+Tested scenarios include:
+- Valid CSV import
+- Existing duplicate employees
+- Duplicate rows within the same CSV
+- Invalid email
+- Invalid salary
+- Missing headers
+- Empty CSV
+- Missing required fields
+- Malformed rows
+- Missing input file
+- Atomic transaction rollback
+- Normal partial import
+All tested scenarios behaved as expected.
+
