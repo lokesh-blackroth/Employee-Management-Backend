@@ -4,6 +4,7 @@ from employees.models import (
     Employee,
     EmployeeProfile,
     EmployeeTransfer,
+    Notification,
 )
 
 
@@ -156,3 +157,26 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             )
 
         return value
+class NotificationSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "notification_type",
+            "title",
+            "message",
+            "is_read",
+            "email_sent",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "notification_type",
+            "title",
+            "message",
+            "email_sent",
+            "created_at",
+            "updated_at",
+        ]

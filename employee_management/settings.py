@@ -142,14 +142,16 @@ STATIC_URL = 'static/'
 
 # Email
 
-MAILERS = {
-    'default': {
-        'BACKEND': os.getenv(
-            "EMAIL_BACKEND",
-            "django.core.mail.backends.console.EmailBackend"
-        ),
-    },
-}
+# Email
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL",
+    "no-reply@example.com",
+)
 
 
 # Logging

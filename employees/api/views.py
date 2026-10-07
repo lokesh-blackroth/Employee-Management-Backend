@@ -29,12 +29,14 @@ from employees.api.serializers import (
     EmployeeProfileSerializer,
     EmployeeSerializer,
     EmployeeTransferSerializer,
+    NotificationSerializer,
 )
 
 from employees.models import (
     Employee,
     EmployeeProfile,
     EmployeeTransfer,
+    Notification,
 )
 
 from employees.services import EmployeeTransferService
@@ -770,3 +772,33 @@ class HealthCheckView(APIView):
             "status": "success",
             "message": "Employee Management Backend is running"
         })
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(
+            recipient=self.request.user
+        ).order_by("-created_at")
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="read",
+    )
+    def mark_read(self, request, pk=None):
+
+        notification = self.get_object()
+
+        notification.is_read = True
+        notification.save(
+            update_fields=["is_read", "updated_at"]
+        )
+
+        serializer = self.get_serializer(notification)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )

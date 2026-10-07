@@ -1,14 +1,14 @@
 from datetime import date
-
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
-
+from django.core import mail
 from rest_framework import status
 from rest_framework.test import APITestCase
-
 from employees.models import UserRole
-
+from employees.models import Notification
+from employees.services.notification_service import NotificationService
+from unittest.mock import patch
 from .models import (
     Department,
     Employee,
@@ -1286,3 +1286,348 @@ class RBACTestCase(APITestCase):
             response.status_code,
             404,
         )
+class NotificationServiceTestCase(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="notification_test",
+            password="Test@12345",
+            email="notification@example.com",
+        )
+
+        self.department = Department.objects.create(
+            name="Notification Department",
+            code="NOTIFY_DEPT",
+        )
+
+        self.employee = Employee.objects.create(
+            user=self.user,
+            employee_code="NOTIFY001",
+            first_name="Notification",
+            last_name="Employee",
+            email="notification@example.com",
+            phone="9876543210",
+            department=self.department,
+            designation="Developer",
+            salary=50000,
+            joining_date=date(2026, 1, 1),
+            is_active=True,
+        )
+
+    def test_create_notification(self):
+        notification = NotificationService.create_notification(
+            recipient=self.user,
+            notification_type="GENERAL",
+            title="Test Notification",
+            message="This is a test notification.",
+        )
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(
+            notification.recipient,
+            self.user,
+        )
+        self.assertFalse(notification.is_read)
+        self.assertFalse(notification.email_sent)
+
+    def test_welcome_notification_sends_email(self):
+        notification = NotificationService.send_welcome_notification(
+            self.employee
+        )
+
+        self.assertIsNotNone(notification)
+        self.assertTrue(notification.email_sent)
+        self.assertEqual(
+            Notification.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            1,
+        )
+
+        self.assertIn(
+            "Welcome",
+            mail.outbox[0].subject,
+        )
+
+        self.assertIn(
+            "Notification",
+            mail.outbox[0].body,
+        )
+
+    def test_duplicate_welcome_notification(self):
+        first_notification = (
+            NotificationService.send_welcome_notification(
+                self.employee
+            )
+        )
+
+        second_notification = (
+            NotificationService.send_welcome_notification(
+                self.employee
+            )
+        )
+
+        self.assertEqual(
+            first_notification.id,
+            second_notification.id,
+        )
+
+        self.assertEqual(
+            Notification.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            1,
+        )
+
+    def test_missing_recipient_email(self):
+        self.user.email = ""
+        self.user.save(update_fields=["email"])
+
+        notification = (
+            NotificationService.send_welcome_notification(
+                self.employee
+            )
+        )
+
+        self.assertIsNotNone(notification)
+        self.assertFalse(notification.email_sent)
+        self.assertEqual(
+            notification.email_error,
+            "Recipient email is missing.",
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            0,
+        )
+
+    def test_missing_template_records_failure(self):
+        notification = NotificationService.create_notification(
+            recipient=self.user,
+            notification_type="WELCOME",
+            title="Test Welcome",
+            message="Test welcome message.",
+        )
+
+        result = NotificationService.send_email(
+            notification=notification,
+            subject="Test Welcome",
+            template_name="emails/template_that_does_not_exist.html",
+            context={
+                "employee": self.employee,
+            },
+        )
+
+        notification.refresh_from_db()
+
+        self.assertFalse(result)
+        self.assertFalse(notification.email_sent)
+        self.assertTrue(notification.email_error)
+
+    def test_welcome_email_html_rendering(self):
+        notification = NotificationService.send_welcome_notification(
+            self.employee
+        )
+
+        self.assertTrue(notification.email_sent)
+        self.assertEqual(len(mail.outbox), 1)
+
+        email = mail.outbox[0]
+
+        self.assertEqual(
+            email.content_subtype,
+            "plain",
+        )
+
+        self.assertEqual(len(email.alternatives), 1)
+
+        html_content = email.alternatives[0].content
+
+        self.assertIn(
+            self.employee.first_name,
+            html_content,
+        )
+
+        self.assertIn(
+            self.employee.employee_code,
+            html_content,
+        )
+
+    @patch(
+        "employees.services.notification_service.EmailMultiAlternatives.send"
+    )
+    def test_email_sending_failure(self, mock_send):
+        mock_send.side_effect = Exception(
+            "SMTP configuration error"
+        )
+
+        notification = NotificationService.send_welcome_notification(
+            self.employee
+        )
+
+        notification.refresh_from_db()
+
+        self.assertFalse(notification.email_sent)
+
+        self.assertIn(
+            "SMTP configuration error",
+            notification.email_error,
+        )
+
+class NotificationAPITestCase(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="api_notification_user",
+            password="Test@12345",
+            email="api_notification@example.com",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="other_notification_user",
+            password="Test@12345",
+            email="other_notification@example.com",
+        )
+
+        self.notification = Notification.objects.create(
+            recipient=self.user,
+            notification_type="GENERAL",
+            title="Test Notification",
+            message="This is a test notification.",
+        )
+
+        self.other_notification = Notification.objects.create(
+            recipient=self.other_user,
+            notification_type="GENERAL",
+            title="Other Notification",
+            message="This belongs to another user.",
+        )
+
+    def test_list_notifications(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            "/api/v1/notifications/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            len(response.data),
+            1,
+        )
+
+        self.assertEqual(
+            response.data[0]["title"],
+            "Test Notification",
+        )
+
+    def test_user_can_only_see_own_notifications(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(
+            "/api/v1/notifications/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        notification_ids = [
+            item["id"]
+            for item in response.data
+        ]
+
+        self.assertIn(
+            self.notification.id,
+            notification_ids,
+        )
+
+        self.assertNotIn(
+            self.other_notification.id,
+            notification_ids,
+        )
+
+    def test_mark_notification_as_read(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            f"/api/v1/notifications/"
+            f"{self.notification.id}/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.notification.refresh_from_db()
+
+        self.assertTrue(
+            self.notification.is_read
+        )
+
+        self.assertTrue(
+            response.data["is_read"]
+        )
+
+    def test_mark_notification_as_read_is_idempotent(self):
+        self.client.force_authenticate(user=self.user)
+
+        first_response = self.client.patch(
+            f"/api/v1/notifications/"
+            f"{self.notification.id}/read/"
+        )
+
+        second_response = self.client.patch(
+            f"/api/v1/notifications/"
+            f"{self.notification.id}/read/"
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.notification.refresh_from_db()
+
+        self.assertTrue(
+            self.notification.is_read
+        )
+
+    def test_invalid_notification_id(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            "/api/v1/notifications/999999/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_unauthenticated_notification_list(self):
+        response = self.client.get(
+            "/api/v1/notifications/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )       
