@@ -1,4 +1,5 @@
 from datetime import date
+from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
@@ -8,7 +9,6 @@ from rest_framework.test import APITestCase
 from employees.models import UserRole
 from employees.models import Notification
 from employees.services.notification_service import NotificationService
-from unittest.mock import patch
 from .models import (
     Department,
     Employee,
@@ -1630,4 +1630,91 @@ class NotificationAPITestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
-        )       
+        )
+        from unittest.mock import patch
+
+from django.test import TestCase
+
+from employees.models import Employee
+from employees.tasks import (
+    generate_employee_report,
+    process_employee_csv,
+    send_welcome_email,
+)
+
+
+class CeleryTaskTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.employee = Employee.objects.create(
+            employee_code="CELERYTEST001",
+            first_name="Celery",
+            last_name="Test",
+            email="celery.test@example.com",
+            phone="9999999999",
+            designation="Developer",
+            salary=50000,
+            joining_date="2026-01-01",
+        )
+
+    def test_send_welcome_email_success(self):
+        with patch("employees.tasks.send_mail") as mock_send_mail:
+            result = send_welcome_email.run(self.employee.id)
+
+        mock_send_mail.assert_called_once()
+        self.assertIn(self.employee.email, result)
+
+    def test_send_welcome_email_invalid_employee(self):
+        with self.assertRaises(Employee.DoesNotExist):
+            send_welcome_email.run(999999)
+
+    def test_generate_employee_report_success(self):
+        result = generate_employee_report.run()
+
+        self.assertEqual(result["status"], "success")
+        self.assertGreaterEqual(result["employee_count"], 1)
+        self.assertIsInstance(result["report"], list)
+
+    def test_process_employee_csv_success(self):
+        import csv
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".csv",
+            delete=False,
+            newline="",
+            encoding="utf-8",
+        ) as csv_file:
+
+            writer = csv.writer(csv_file)
+
+            writer.writerow([
+                "employee_code",
+                "first_name",
+                "last_name",
+                "email",
+                "phone",
+                "designation",
+                "salary",
+                "joining_date",
+            ])
+
+            writer.writerow([
+                "CELERYCSV001",
+                "CSV",
+                "Test",
+                "celerycsv@example.com",
+                "8888888888",
+                "Developer",
+                "55000",
+                "2026-01-01",
+            ])
+
+            csv_path = csv_file.name
+
+        result = process_employee_csv.run(csv_path)
+
+        self.assertEqual(result["successful"], 1)
+        self.assertEqual(result["failed"], 0)

@@ -1,5 +1,5 @@
 from django.urls import include, path
-
+from employees.api.views import trigger_welcome_email
 from .routers import router
 from .views import (
     DepartmentSummaryView,
@@ -112,4 +112,11 @@ urlpatterns = [
         TokenRefreshView.as_view(),
         name="token_refresh",
     ),
+
+    path(
+    "employees/<int:employee_id>/welcome-email/",
+    trigger_welcome_email,
+    name="trigger-welcome-email",
+    ),
+    
 ]

@@ -3,10 +3,12 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.decorators import api_view
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import status
 
 from employees.api.permissions import (
     IsAdmin,
@@ -41,7 +43,7 @@ from employees.models import (
 
 from employees.services import EmployeeTransferService
 
-
+from employees.tasks import send_welcome_email
 # ============================================================
 # EMPLOYEE VIEWSET
 # ============================================================
@@ -802,3 +804,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             serializer.data,
             status=status.HTTP_200_OK,
         )
+    # ============================================================
+# CELERY BACKGROUND TASKS
+# ============================================================
+
+@api_view(["POST"])
+def trigger_welcome_email(request, employee_id):
+    task = send_welcome_email.delay(employee_id)
+
+    return Response(
+        {
+            "status": "success",
+            "message": "Welcome email task queued successfully",
+            "task_id": task.id,
+        },
+        status=status.HTTP_202_ACCEPTED,
+    )
