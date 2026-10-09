@@ -7,6 +7,9 @@ from employees.models import (
     Notification,
 )
 
+from employees.services.cache_service import (
+    invalidate_department_summary_cache,
+)
 
 class EmployeeSerializer(serializers.ModelSerializer):
 
@@ -142,6 +145,20 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+    def create(self, validated_data):
+        employee = super().create(validated_data)
+
+        invalidate_department_summary_cache()
+
+        return employee
+
+    def update(self, instance, validated_data):
+        employee = super().update(instance, validated_data)
+
+        invalidate_department_summary_cache()
+
+        return employee
 
     def validate_emergency_contact(self, value):
         value = value.strip()

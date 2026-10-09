@@ -151,3 +151,20 @@ def process_employee_csv(csv_file_path):
             csv_file_path,
         )
         raise
+    
+@app.task
+def scheduled_employee_summary():
+    active_count = Employee.objects.filter(is_active=True).count()
+    inactive_count = Employee.objects.filter(is_active=False).count()
+
+    logger.info(
+        "Scheduled employee summary: active=%s, inactive=%s",
+        active_count,
+        inactive_count,
+    )
+
+    return {
+        "status": "success",
+        "active_employees": active_count,
+        "inactive_employees": inactive_count,
+    }

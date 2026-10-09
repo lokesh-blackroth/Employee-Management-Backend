@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     'django_filters',
     'corsheaders',
     'employees.apps.EmployeesConfig',
+
+    'django_celery_beat',
 ]
 
 
@@ -221,4 +223,25 @@ CELERY_BROKER_URL = os.getenv(
 CELERY_RESULT_BACKEND = os.getenv(
     "CELERY_RESULT_BACKEND",
     "redis://127.0.0.1:6379/1",
+)
+
+# Redis Cache Configuration
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv(
+            "DJANGO_CACHE_URL",
+            "redis://127.0.0.1:6379/2",
+        ),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "employee_management",
+        "TIMEOUT": 300,
+    },
+}
+
+# Celery Beat Scheduler
+CELERY_BEAT_SCHEDULER = (
+    "django_celery_beat.schedulers:DatabaseScheduler"
 )

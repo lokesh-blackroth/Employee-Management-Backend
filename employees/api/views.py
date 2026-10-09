@@ -22,9 +22,13 @@ from employees.api.auth_serializers import (
 )
 
 from employees.api.reports import (
-    get_department_summary,
     get_project_summary,
     get_salary_summary,
+)
+
+from employees.services.cache_service import (
+    get_cached_department_summary,
+    invalidate_department_summary_cache,
 )
 
 from employees.api.serializers import (
@@ -52,6 +56,10 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        invalidate_department_summary_cache()
 
     # ========================================================
     # ROLE-BASED PERMISSIONS
@@ -301,6 +309,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 )
             )
 
+            invalidate_department_summary_cache()
+
             return Response(
                 EmployeeTransferSerializer(
                     transfer
@@ -378,7 +388,7 @@ class DepartmentSummaryView(APIView):
 
     def get(self, request):
 
-        data = get_department_summary()
+        data = get_cached_department_summary()
 
         return Response(data)
 
