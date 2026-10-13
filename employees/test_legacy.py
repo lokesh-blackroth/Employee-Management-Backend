@@ -807,7 +807,7 @@ class AdvancedORMReportingTestCase(APITestCase):
             len(context.captured_queries),
             2,
         )
-      
+
 # ============================================================
 # RBAC TESTS
 # ============================================================
