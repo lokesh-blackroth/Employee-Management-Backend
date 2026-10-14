@@ -1,13 +1,13 @@
 import logging
 
-from django.core.mail import send_mail
-
 from employee_management.celery import app
 from employees.models import Employee
+from employees.services.notification_service import (
+    NotificationService,
+)
 
 
 logger = logging.getLogger(__name__)
-
 
 @app.task(
     bind=True,
@@ -29,12 +29,24 @@ def send_welcome_email(self, employee_id):
         raise
 
     try:
-        send_mail(
-            subject="Welcome to the Company",
-            message=f"Hello {employee.first_name}, welcome to the company!",
-            from_email=None,
-            recipient_list=[employee.email],
+        notification = NotificationService.send_welcome_notification(
+            employee
         )
+
+        if notification is None:
+            logger.warning(
+                "Welcome notification skipped because employee has no user: "
+                "employee_id=%s",
+                employee_id,
+            )
+            return "Welcome notification skipped"
+
+        if not notification.email_sent:
+            raise RuntimeError(
+                notification.email_error
+                or "Welcome email failed"
+            )
+
     except Exception as exc:
         logger.exception(
             "Welcome email failed for employee_id=%s",
@@ -47,11 +59,13 @@ def send_welcome_email(self, employee_id):
         )
 
     logger.info(
-        "Welcome email sent successfully to employee_id=%s",
+        "Welcome email processed successfully for employee_id=%s",
         employee_id,
     )
 
-    return f"Welcome email sent to {employee.email}"
+    return (
+        f"Welcome email processed for {employee.email}"
+    )
 
 
 @app.task
@@ -168,3 +182,4 @@ def scheduled_employee_summary():
         "active_employees": active_count,
         "inactive_employees": inactive_count,
     }
+

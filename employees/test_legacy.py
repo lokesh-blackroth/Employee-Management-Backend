@@ -1647,7 +1647,16 @@ class CeleryTaskTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        from django.contrib.auth.models import User
+
+        cls.user = User.objects.create_user(
+            username="celery_test_user",
+            password="Test@12345",
+            email="celery.test@example.com",
+        )
+
         cls.employee = Employee.objects.create(
+            user=cls.user,
             employee_code="CELERYTEST001",
             first_name="Celery",
             last_name="Test",
@@ -1659,22 +1668,97 @@ class CeleryTaskTests(TestCase):
         )
 
     def test_send_welcome_email_success(self):
-        with patch("employees.tasks.send_mail") as mock_send_mail:
-            result = send_welcome_email.run(self.employee.id)
+        with patch(
+            "employees.services.notification_service.EmailMultiAlternatives.send"
+        ) as mock_send:
+            result = send_welcome_email.run(
+                self.employee.id
+            )
 
-        mock_send_mail.assert_called_once()
-        self.assertIn(self.employee.email, result)
+        mock_send.assert_called_once()
+
+        self.assertIn(
+            self.employee.email,
+            result,
+        )
+
+    def test_send_welcome_email_duplicate_execution(self):
+        with patch(
+            "employees.services.notification_service.EmailMultiAlternatives.send"
+        ) as mock_send:
+            first_result = send_welcome_email.run(
+                self.employee.id
+            )
+
+            second_result = send_welcome_email.run(
+                self.employee.id
+            )
+
+        self.assertEqual(
+            mock_send.call_count,
+            1,
+        )
+
+        self.assertIn(
+            self.employee.email,
+            first_result,
+        )
+
+        self.assertIn(
+            self.employee.email,
+            second_result,
+        )
+
+    def test_send_welcome_email_creates_one_notification(self):
+        from employees.models import Notification
+
+        with patch(
+            "employees.services.notification_service.EmailMultiAlternatives.send"
+        ) as mock_send:
+            send_welcome_email.run(
+                self.employee.id
+            )
+
+            send_welcome_email.run(
+                self.employee.id
+            )
+
+        self.assertEqual(
+            mock_send.call_count,
+            1,
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                recipient=self.user,
+                notification_type="WELCOME",
+            ).count(),
+            1,
+        )
 
     def test_send_welcome_email_invalid_employee(self):
-        with self.assertRaises(Employee.DoesNotExist):
+        with self.assertRaises(
+            Employee.DoesNotExist
+        ):
             send_welcome_email.run(999999)
 
     def test_generate_employee_report_success(self):
         result = generate_employee_report.run()
 
-        self.assertEqual(result["status"], "success")
-        self.assertGreaterEqual(result["employee_count"], 1)
-        self.assertIsInstance(result["report"], list)
+        self.assertEqual(
+            result["status"],
+            "success",
+        )
+
+        self.assertGreaterEqual(
+            result["employee_count"],
+            1,
+        )
+
+        self.assertIsInstance(
+            result["report"],
+            list,
+        )
 
     def test_process_employee_csv_success(self):
         import csv
@@ -1714,7 +1798,16 @@ class CeleryTaskTests(TestCase):
 
             csv_path = csv_file.name
 
-        result = process_employee_csv.run(csv_path)
+        result = process_employee_csv.run(
+            csv_path
+        )
 
-        self.assertEqual(result["successful"], 1)
-        self.assertEqual(result["failed"], 0)
+        self.assertEqual(
+            result["successful"],
+            1,
+        )
+
+        self.assertEqual(
+            result["failed"],
+            0,
+        )
