@@ -1,4 +1,5 @@
 import logging
+import time
 
 from employee_management.celery import app
 from employees.models import Employee
@@ -168,18 +169,36 @@ def process_employee_csv(csv_file_path):
     
 @app.task
 def scheduled_employee_summary():
-    active_count = Employee.objects.filter(is_active=True).count()
-    inactive_count = Employee.objects.filter(is_active=False).count()
+    start_time = time.perf_counter()
 
-    logger.info(
-        "Scheduled employee summary: active=%s, inactive=%s",
-        active_count,
-        inactive_count,
-    )
+    logger.info("Scheduled employee summary started")
 
-    return {
-        "status": "success",
-        "active_employees": active_count,
-        "inactive_employees": inactive_count,
-    }
+    try:
+        active_count = Employee.objects.filter(is_active=True).count()
+        inactive_count = Employee.objects.filter(is_active=False).count()
+
+        duration = time.perf_counter() - start_time
+
+        logger.info(
+            "Scheduled employee summary finished: "
+            "active=%s, inactive=%s, duration=%.4f seconds",
+            active_count,
+            inactive_count,
+            duration,
+        )
+
+        return {
+            "status": "success",
+            "active_employees": active_count,
+            "inactive_employees": inactive_count,
+        }
+
+    except Exception:
+        duration = time.perf_counter() - start_time
+
+        logger.exception(
+            "Scheduled employee summary failed: duration=%.4f seconds",
+            duration,
+        )
+        raise
 
