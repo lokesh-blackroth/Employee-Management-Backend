@@ -10,11 +10,42 @@ from employees.services.notification_service import (
 
 logger = logging.getLogger(__name__)
 
+
 @app.task(
     bind=True,
     max_retries=3,
+    autoretry_for=(RuntimeError,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    soft_time_limit=30,
+    time_limit=60,
 )
 def send_welcome_email(self, employee_id):
+    """
+    Send a welcome email for an employee.
+
+    Task contract:
+        employee_id must be a positive integer.
+
+    Idempotency:
+        NotificationService checks for an existing successfully
+        sent WELCOME notification before creating another one.
+
+    Retry policy:
+        RuntimeError failures are retried up to 3 times using
+        exponential backoff with jitter.
+
+    Time limits:
+        Soft limit: 30 seconds.
+        Hard limit: 60 seconds.
+    """
+
+    if not isinstance(employee_id, int) or employee_id <= 0:
+        raise ValueError(
+            "employee_id must be a positive integer"
+        )
+
     logger.info(
         "Starting welcome email task for employee_id=%s",
         employee_id,
@@ -27,36 +58,26 @@ def send_welcome_email(self, employee_id):
             "Employee not found: employee_id=%s",
             employee_id,
         )
-        raise
-
-    try:
-        notification = NotificationService.send_welcome_notification(
-            employee
+        raise ValueError(
+            f"Employee {employee_id} does not exist"
         )
 
-        if notification is None:
-            logger.warning(
-                "Welcome notification skipped because employee has no user: "
-                "employee_id=%s",
-                employee_id,
-            )
-            return "Welcome notification skipped"
+    notification = NotificationService.send_welcome_notification(
+        employee
+    )
 
-        if not notification.email_sent:
-            raise RuntimeError(
-                notification.email_error
-                or "Welcome email failed"
-            )
-
-    except Exception as exc:
-        logger.exception(
-            "Welcome email failed for employee_id=%s",
+    if notification is None:
+        logger.warning(
+            "Welcome notification skipped because employee has no user: "
+            "employee_id=%s",
             employee_id,
         )
+        return "Welcome notification skipped"
 
-        raise self.retry(
-            exc=exc,
-            countdown=2 ** self.request.retries,
+    if not notification.email_sent:
+        raise RuntimeError(
+            notification.email_error
+            or "Welcome email failed"
         )
 
     logger.info(
@@ -166,7 +187,8 @@ def process_employee_csv(csv_file_path):
             csv_file_path,
         )
         raise
-    
+
+
 @app.task
 def scheduled_employee_summary():
     start_time = time.perf_counter()
@@ -174,8 +196,13 @@ def scheduled_employee_summary():
     logger.info("Scheduled employee summary started")
 
     try:
-        active_count = Employee.objects.filter(is_active=True).count()
-        inactive_count = Employee.objects.filter(is_active=False).count()
+        active_count = Employee.objects.filter(
+            is_active=True
+        ).count()
+
+        inactive_count = Employee.objects.filter(
+            is_active=False
+        ).count()
 
         duration = time.perf_counter() - start_time
 
@@ -201,4 +228,3 @@ def scheduled_employee_summary():
             duration,
         )
         raise
-
