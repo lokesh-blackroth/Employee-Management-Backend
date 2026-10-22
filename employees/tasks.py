@@ -6,6 +6,9 @@ from employees.models import Employee
 from employees.services.notification_service import (
     NotificationService,
 )
+from employees.services.task_lock_service import (
+    TaskLockService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -26,15 +29,15 @@ def send_welcome_email(self, employee_id):
     Send a welcome email for an employee.
 
     Task contract:
-        employee_id must be a positive integer.
+        employee_id: positive integer
 
     Idempotency:
         NotificationService checks for an existing successfully
         sent WELCOME notification before creating another one.
 
     Retry policy:
-        RuntimeError failures are retried up to 3 times using
-        exponential backoff with jitter.
+        RuntimeError failures are retried up to 3 times with
+        exponential backoff and jitter.
 
     Time limits:
         Soft limit: 30 seconds.
@@ -85,13 +88,26 @@ def send_welcome_email(self, employee_id):
         employee_id,
     )
 
-    return (
-        f"Welcome email processed for {employee.email}"
-    )
+    return f"Welcome email processed for {employee.email}"
 
 
-@app.task
+@app.task(
+    expires=600,
+    soft_time_limit=120,
+    time_limit=180,
+)
 def generate_employee_report():
+    """
+    Generate the employee report.
+
+    Task expiration:
+        600 seconds.
+
+    Time limits:
+        Soft limit: 120 seconds.
+        Hard limit: 180 seconds.
+    """
+
     logger.info("Starting employee report generation")
 
     employees = Employee.objects.select_related("department").values(
@@ -143,8 +159,23 @@ def generate_employee_report():
     }
 
 
-@app.task
+@app.task(
+    expires=600,
+    soft_time_limit=120,
+    time_limit=180,
+)
 def process_employee_csv(csv_file_path):
+    """
+    Process an employee CSV file.
+
+    Task expiration:
+        600 seconds.
+
+    Time limits:
+        Soft limit: 120 seconds.
+        Hard limit: 180 seconds.
+    """
+
     logger.info(
         "Starting employee CSV processing: %s",
         csv_file_path,
@@ -189,11 +220,52 @@ def process_employee_csv(csv_file_path):
         raise
 
 
-@app.task
-def scheduled_employee_summary():
+@app.task(
+    bind=True,
+    expires=240,
+    soft_time_limit=30,
+    time_limit=60,
+)
+def scheduled_employee_summary(self):
+    """
+    Generate the scheduled employee summary.
+
+    Queue:
+        maintenance
+
+    Task expiration:
+        240 seconds.
+
+    Overlap protection:
+        A Redis-backed lock prevents multiple instances
+        of this scheduled task from running simultaneously.
+
+    Time limits:
+        Soft limit: 30 seconds.
+        Hard limit: 60 seconds.
+    """
+
+    lock = TaskLockService.acquire(
+        "scheduled_employee_summary",
+        timeout=300,
+    )
+
+    if lock is None:
+        logger.warning(
+            "Scheduled employee summary skipped: "
+            "another execution is already running"
+        )
+
+        return {
+            "status": "skipped",
+            "reason": "already_running",
+        }
+
     start_time = time.perf_counter()
 
-    logger.info("Scheduled employee summary started")
+    logger.info(
+        "Scheduled employee summary started"
+    )
 
     try:
         active_count = Employee.objects.filter(
@@ -224,7 +296,12 @@ def scheduled_employee_summary():
         duration = time.perf_counter() - start_time
 
         logger.exception(
-            "Scheduled employee summary failed: duration=%.4f seconds",
+            "Scheduled employee summary failed: "
+            "duration=%.4f seconds",
             duration,
         )
+
         raise
+
+    finally:
+        TaskLockService.release(lock)

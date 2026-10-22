@@ -144,7 +144,6 @@ STATIC_URL = 'static/'
 
 # Email
 
-# Email
 EMAIL_BACKEND = os.getenv(
     "EMAIL_BACKEND",
     "django.core.mail.backends.console.EmailBackend",
@@ -215,6 +214,11 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
+
+# -------------------------------------------------------------------
+# Celery Broker & Result Backend
+# -------------------------------------------------------------------
+
 CELERY_BROKER_URL = os.getenv(
     "CELERY_BROKER_URL",
     "redis://127.0.0.1:6379/0",
@@ -225,7 +229,11 @@ CELERY_RESULT_BACKEND = os.getenv(
     "redis://127.0.0.1:6379/1",
 )
 
+
+# -------------------------------------------------------------------
 # Redis Cache Configuration
+# -------------------------------------------------------------------
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -241,9 +249,56 @@ CACHES = {
     },
 }
 
+
+# -------------------------------------------------------------------
 # Celery Beat Scheduler
+# -------------------------------------------------------------------
+
 CELERY_BEAT_SCHEDULER = (
     "django_celery_beat.schedulers:DatabaseScheduler"
 )
 
 CELERY_TIMEZONE = TIME_ZONE
+
+
+# -------------------------------------------------------------------
+# Celery Queue Topology & Backpressure
+# -------------------------------------------------------------------
+
+CELERY_TASK_DEFAULT_QUEUE = "default"
+
+CELERY_TASK_QUEUES = {
+    "default": {},
+    "reports": {},
+    "maintenance": {},
+    "notifications": {},
+}
+
+CELERY_TASK_ROUTES = {
+    "employees.tasks.generate_employee_report": {
+        "queue": "reports",
+    },
+    "employees.tasks.process_employee_csv": {
+        "queue": "maintenance",
+    },
+    "employees.tasks.scheduled_employee_summary": {
+        "queue": "maintenance",
+    },
+    "employees.tasks.send_welcome_email": {
+        "queue": "notifications",
+    },
+}
+
+# Process one prefetched task at a time.
+# This helps prevent a worker from reserving a large backlog.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# Acknowledge tasks after successful execution.
+CELERY_TASK_ACKS_LATE = True
+
+# If a worker disappears while processing a task,
+# allow the broker to make the task available again.
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+
+# Prevent tasks from waiting indefinitely in Redis.
+CELERY_TASK_DEFAULT_EXPIRES = 300
