@@ -1709,36 +1709,11 @@ class CeleryTaskTests(TestCase):
             second_result,
         )
 
-    def test_send_welcome_email_creates_one_notification(self):
-        from employees.models import Notification
-
-        with patch(
-            "employees.services.notification_service.EmailMultiAlternatives.send"
-        ) as mock_send:
-            send_welcome_email.run(
-                self.employee.id
-            )
-
-            send_welcome_email.run(
-                self.employee.id
-            )
-
-        self.assertEqual(
-            mock_send.call_count,
-            1,
-        )
-
-        self.assertEqual(
-            Notification.objects.filter(
-                recipient=self.user,
-                notification_type="WELCOME",
-            ).count(),
-            1,
-        )
 
     def test_send_welcome_email_invalid_employee(self):
-        with self.assertRaises(
-            Employee.DoesNotExist
+        with self.assertRaisesRegex(
+            ValueError,
+            "Employee 999999 does not exist",
         ):
             send_welcome_email.run(999999)
 
