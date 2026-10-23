@@ -229,6 +229,13 @@ CELERY_RESULT_BACKEND = os.getenv(
     "redis://127.0.0.1:6379/1",
 )
 
+# -------------------------------------------------------------------
+# Celery Monitoring & Task Events
+# -------------------------------------------------------------------
+
+CELERY_TASK_SEND_SENT_EVENT = True
+CELERY_WORKER_SEND_TASK_EVENTS = True
+
 
 # -------------------------------------------------------------------
 # Redis Cache Configuration
