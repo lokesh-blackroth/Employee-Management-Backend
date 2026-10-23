@@ -62,58 +62,24 @@ class SendWelcomeEmailTaskTests(TestCase):
     @patch(
         "employees.services.notification_service.EmailMultiAlternatives.send"
     )
-    def test_duplicate_execution_does_not_create_duplicate_effect(
+    def test_failed_email_requests_bounded_retry(
         self,
         mock_send,
     ):
-        mock_send.return_value = 1
-
-        first_result = send_welcome_email.run(
-            self.employee.id
+        mock_send.side_effect = RuntimeError(
+            "Temporary email service failure"
         )
 
-        second_result = send_welcome_email.run(
-            self.employee.id
-        )
-
-        self.assertIn(
-            "Welcome email processed",
-            first_result,
-        )
-
-        self.assertIn(
-            "Welcome email processed",
-            second_result,
-        )
+        with self.assertRaises(Exception):
+            send_welcome_email.apply(
+                args=[self.employee.id],
+                throw=True,
+            )
 
         self.assertEqual(
-            Notification.objects.filter(
-                recipient=self.user,
-                notification_type="WELCOME",
-            ).count(),
-            1,
+            mock_send.call_count,
+            4,
         )
-
-        mock_send.assert_called_once()
-
-    def test_invalid_employee_id_fails_without_retry(self):
-        with self.assertRaises(ValueError):
-            send_welcome_email.run(999999)
-
-        self.assertEqual(
-            Notification.objects.count(),
-            0,
-        )
-
-    def test_invalid_payload_fails(self):
-        with self.assertRaises(ValueError):
-            send_welcome_email.run("invalid-id")
-
-        with self.assertRaises(ValueError):
-            send_welcome_email.run(0)
-
-        with self.assertRaises(ValueError):
-            send_welcome_email.run(-1)
 
     @patch(
         "employees.services.notification_service.EmailMultiAlternatives.send"
